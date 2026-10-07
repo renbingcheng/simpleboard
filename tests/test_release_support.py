@@ -27,7 +27,9 @@ class SourceReleaseTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="simpleboard-source-test-")
         self.addCleanup(temporary.cleanup)
-        self.directory = Path(temporary.name)
+        # Windows runners may expose TEMP through an 8.3 alias (RUNNER~1).
+        # Resource helpers return resolved paths, so comparisons use that form.
+        self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "project"
         self.root.mkdir()
         # Only minimal fixture documents: no real licenses, screenshots, boards
@@ -138,6 +140,16 @@ class SourceReleaseTests(unittest.TestCase):
                 self.assertIn(prefix + relative, names)
                 self.assertEqual((self.root / "dist" / (prefix + relative)).read_bytes(), source.read_bytes())
         self.assertFalse(any("private.md" in name or "VALIDATION.md" in name for name in names))
+
+    def test_onedir_accepts_noncanonical_project_root(self):
+        self.write("dist/SimpleBoard/SimpleBoard.exe", b"executable fixture")
+        alternate = self.root / ".." / self.root.name
+        self.assertEqual(alternate.resolve(), self.root)
+        target, entries = package_onedir(alternate)
+        self.assertEqual(target.parent, self.root / "dist")
+        names = {name for _, name in entries}
+        self.assertIn("SimpleBoard/README.md", names)
+        self.assertIn("SimpleBoard/_internal/licenses/example/NOTICE.txt", names)
 
     def test_notice_tampering_rejects_archive_without_overwriting_valid_output(self):
         destination = self.directory / "source.zip"

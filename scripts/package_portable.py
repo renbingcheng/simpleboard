@@ -38,6 +38,7 @@ def checksum(path: Path) -> str:
 def verify_onefile_resources(root: Path, executable: Path) -> None:
     from PyInstaller.archive.readers import CArchiveReader
 
+    root = root.resolve()
     archive = CArchiveReader(str(executable))
     names = {name.replace("\\", "/"): name for name in archive.toc}
     reject_private_resources(root, names)
@@ -71,6 +72,7 @@ def verify_onefile_resources(root: Path, executable: Path) -> None:
 
 
 def package_onedir(root: Path) -> tuple[Path, list[tuple[Path, str]]]:
+    root = root.resolve()
     portable = root / "dist" / "SimpleBoard"
     if not (portable / "SimpleBoard.exe").is_file():
         raise SystemExit("Build directory fallback with build.ps1 -Mode onedir first.")

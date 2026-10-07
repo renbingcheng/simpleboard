@@ -24,16 +24,16 @@ Think of it as an alternative for **personal handwriting and local presentations
 
 ## Download and use
 
-Source code and Windows portable packages are available on **GitHub**. A **Gitee** mirror has not been published yet.
+Source code and Windows portable packages are available on **GitHub** and **Gitee**. Choose whichever service is more accessible to you.
 
 | Channel | Download location |
 | --- | --- |
 | GitHub | [Source repository](https://github.com/renbingcheng/simpleboard) · [Downloads](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.6) |
-| Gitee | Not published yet |
+| Gitee | [Source repository](https://gitee.com/renbingcheng/simpleboard) · [Downloads](https://gitee.com/renbingcheng/simpleboard/releases) |
 
 To use the app:
 
-1. Open the GitHub downloads page above and read the release notes.
+1. Open either downloads page above and read the release notes.
 2. Download `SimpleBoard-<version>-win-x64-onefile.zip`, for example `SimpleBoard-1.0.6-win-x64-onefile.zip`.
 3. Extract it and open `SimpleBoard.exe`. **No separate Python installation or runtime setup is required.**
 4. Press `Ctrl+S` to save an editable `.qboard` file. Press `Ctrl+Shift+E` to export PNG or PDF for sharing.

@@ -24,16 +24,16 @@
 
 ## 下载与使用
 
-源码与 Windows 便携包通过 **GitHub** 提供；**Gitee** 镜像暂未发布。
+源码与 Windows 便携包通过 **GitHub** 和 **Gitee** 提供，可按网络情况选择访问渠道。
 
 | 渠道 | 下载入口 |
 | --- | --- |
 | GitHub | [源码仓库](https://github.com/renbingcheng/simpleboard) · [版本下载](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.6) |
-| Gitee | 暂未发布 |
+| Gitee | [源码仓库](https://gitee.com/renbingcheng/simpleboard) · [版本下载](https://gitee.com/renbingcheng/simpleboard/releases) |
 
 按以下步骤使用：
 
-1. 打开上方 GitHub 版本下载页面，查看版本说明。
+1. 打开上方任一版本下载页面，查看版本说明。
 2. 下载 `SimpleBoard-<版本>-win-x64-onefile.zip`，例如 `SimpleBoard-1.0.6-win-x64-onefile.zip`。
 3. 解压后双击 `SimpleBoard.exe`，即可开始使用，**无需安装 Python 或另行配置运行环境**。
 4. 用 `Ctrl+S` 将白板保存为 `.qboard` 文件，下次可继续编辑；需要分享时，用 `Ctrl+Shift+E` 导出 PNG 或 PDF。

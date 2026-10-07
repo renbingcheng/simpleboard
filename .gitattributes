@@ -1,0 +1,12 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ps1 text eol=crlf
+*.ico binary
+*.png binary
+*.qboard binary
+# License bytes are pinned in licenses/sources.json; never normalize them.
+licenses/** -text

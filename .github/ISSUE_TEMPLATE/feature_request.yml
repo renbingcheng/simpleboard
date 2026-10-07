@@ -1,0 +1,28 @@
+name: 功能建议
+description: 说明使用场景、遇到的问题与希望的行为。
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 当前遇到的问题
+      description: 描述一次具体课堂、会议或演示场景，避免私人内容。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 希望如何操作
+      description: 说明操作与可见结果，尤其是 Surface Pen、触摸和鼠标各自的行为。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有办法与替代方案
+      description: 可说明目前如何绕过，以及建议是否影响离线运行、本地保存或书写响应。
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 可选参考
+      description: 引用其他软件行为时提供版本与公开链接，区分实测、印象和推测；不要上传无权分享的素材。

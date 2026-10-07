@@ -1,0 +1,74 @@
+SimpleBoard — Third-party notices
+================================
+
+SimpleBoard's own code is released under GPL-3.0-only; see the root LICENSE.
+That choice does not replace the licenses of its dependencies. Individual
+upstream copyright statements and license texts are preserved in licenses/.
+See docs/THIRD_PARTY.md for source locations and distribution requirements.
+
+Qt / PySide6 / Shiboken6 6.11.1
+------------------------------
+The application uses the open-source Qt Core, GUI and Widgets libraries through
+PySide6 and the Shiboken6 runtime, under the applicable LGPL version 3 option.
+These libraries also contain code under other upstream licenses. GPL and
+commercial alternatives are file/module-specific; the presence of a commercial
+license reference or a Qt exception does not grant a commercial license or
+extend an exception to unrelated files.
+
+LGPL/GPL texts: licenses/qtbase/LICENSES/ and licenses/pyside-setup/LICENSES/.
+Copyright and dependency declarations are in the collected qt_attribution.json
+files and their accompanying license files. The qtsvg/ and qtimageformats/
+notices are a conservative upstream inventory, not proof of binary contents.
+https://github.com/qt/qtbase/tree/v6.11.1
+https://github.com/qt/qtsvg/tree/v6.11.1
+https://github.com/qt/qtimageformats/tree/v6.11.1
+https://github.com/pyside/pyside-setup/tree/v6.11.1
+https://doc.qt.io/qtforpython-6/licenses.html
+
+CPython 3.11.2 (recorded reference build)
+---------------------------------------
+Python Software Foundation License and applicable historical/dependency terms.
+licenses/python/LICENSE contains the release license;
+licenses/python/WINDOWS-DISTRIBUTION-LICENSE.txt preserves the Windows
+distribution's combined notices. A different Python patch release requires
+checking and updating the corresponding notices and source records.
+https://github.com/python/cpython/tree/v3.11.2
+
+pyclipper 1.4.0 / Clipper 6.4.2
+-----------------------------
+pyclipper is under the MIT License.
+Copyright (c) 2015 Gregor Ratajc, Lukas Treyer, Maxime Chalton.
+Its compiled module includes Clipper 6.4.2, copyright Angus Johnson 2010-2017,
+under the Boost Software License, Version 1.0.
+licenses/pyclipper/LICENSE preserves the installed wheel's MIT notice.
+licenses/pyclipper/clipper/NOTICE.txt preserves the upstream header declaration;
+licenses/pyclipper/clipper/LICENSE_1_0.txt contains the complete Boost license.
+https://github.com/fonttools/pyclipper/tree/1.4.0
+https://www.boost.org/LICENSE_1_0.txt
+
+PyInstaller 6.12.0
+-----------------
+PyInstaller uses GPL version 2 or later with an exception for its compiled
+bootloader and related embedded files. That exception permits distributing a
+combined executable under the application's terms, subject to the licenses of
+its other dependencies. It does not waive Qt/PySide6 obligations. Runtime hooks
+are covered by Apache License 2.0 as described in licenses/pyinstaller/COPYING.txt;
+modifications to PyInstaller itself have separate upstream requirements.
+https://github.com/pyinstaller/pyinstaller/tree/v6.12.0
+https://pyinstaller.org/en/v6.12.0/license.html
+
+Inventory, source and packaging limits
+-------------------------------------
+licenses/sources.json records upstream URLs, tags, tree identities and file
+SHA-256 checksums. It is a notice inventory, not a complete binary SBOM or an
+archive of all corresponding third-party source. scripts/prepare_licenses.py
+verifies local notices without network by default; refresh is developer-only.
+
+An onedir build stores dynamic libraries under _internal. A onefile build embeds
+them and extracts them to a temporary directory at runtime. Neither packaging
+mode by itself establishes compliance. Temporary extraction is not a verified
+persistent library-replacement mechanism. Publishers must provide the applicable
+corresponding source, notices and permitted recombination/replacement materials.
+Public application source alone is not all third-party corresponding source.
+Keep this notice, docs/THIRD_PARTY.md and licenses/ directly accessible alongside
+a binary release, even when copies are also embedded in the executable.

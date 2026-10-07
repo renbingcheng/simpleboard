@@ -1,0 +1,81 @@
+# Python environments, bytecode and tooling caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+venv/
+/env/
+__pypackages__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage*
+coverage.xml
+htmlcov/
+
+# Build output, exported boards and local diagnostic data
+build/
+dist/
+artifacts/
+output/
+tmp/
+*.qboard
+*.qboard.*
+*.log
+*.tmp
+*.bak
+/*.exe
+/*.zip
+/*.7z
+/settings.json
+/instance.lock
+
+# Editor, OS and local automation state
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.codex/
+.agents/
+.claude/
+/AGENTS.md
+/CLAUDE.md
+.env
+.env.*
+!.env.example
+
+# Internal notes stay local. New root Markdown documents require an explicit
+# public exception; do not force-add internal notes to the public branch.
+/*.md
+!/README.md
+!/README.en.md
+!/AUTHORS.md
+!/CONTRIBUTING.md
+!/CONTRIBUTING.en.md
+!/CHANGELOG.md
+!/SECURITY.md
+
+# Keep only the public dependency disclosure and the README screenshot.
+# Includes internal architecture, development, format/reference, release-review
+# and acceptance/validation documents. Files remain present on this machine.
+/docs/*
+!/docs/THIRD_PARTY.md
+!/docs/images/
+/docs/images/*
+!/docs/images/simpleboard.png
+/internal/
+/private/
+/local-notes/
+/research/
+/reviews/
+
+# Intentionally public: source/tests/build scripts, simpleboard.spec, LICENSE,
+# THIRD_PARTY_NOTICES.txt and the complete licenses/ notice inventory.
+# Git ignore only affects untracked files, never existing commit history.

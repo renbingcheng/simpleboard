@@ -1,0 +1,54 @@
+name: 错误报告
+description: 报告可复现的书写、文件或界面问题。
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请先阅读 SECURITY.md，不要公开利用文件或个人白板。
+        请用人工示例复现；诊断、截图和恢复文件可能含私人信息。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本或提交
+      placeholder: 版本号、Git 提交，以及源码 / onedir / onefile
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 使用环境
+      description: Windows 版本、设备/笔型号、输入方式、屏幕缩放与多屏情况；源码运行时附 Python/PySide6 版本。
+      placeholder: Windows 11；Surface 型号；Surface Pen 型号；150% 缩放；单屏
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最短复现步骤
+      description: 说明从新建白板开始的操作、出现频率；笔尾问题请说明翻转、接触、移动和抬笔顺序。
+      placeholder: |
+        1. 新建白板
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期结果与实际结果
+      description: 涉及文档丢失或保存失败时先保留备份，不要覆盖原件。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 可选的脱敏证据
+      description: 可附人工示例截图、错误文本或输入诊断；检查路径、设备标识、笔迹和屏幕内容。无需上传私人文档。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已检查附件与文本，不含私人白板、凭据或不应公开的信息。
+          required: true

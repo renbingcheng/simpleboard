@@ -1,0 +1,2 @@
+PySide6==6.11.1
+pyclipper==1.4.0

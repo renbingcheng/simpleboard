@@ -28,13 +28,23 @@ a = Analysis([str(root / 'main.py')], pathex=[str(root)], binaries=[],
                  (str(Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)) / "qtbase_zh_CN.qm"),
                   "PySide6/translations")],
              hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[],
-             excludes=['PyQt5', 'PyQt6', 'PySide2', 'tkinter', 'numpy', 'pytest'], noarchive=False)
+             # PySide6's optional OpenSSL setup imports QtNetwork, and standard
+             # library import chains pull in Python SSL. This offline app uses
+             # neither; hashlib can use Python's built-in hash implementations.
+             excludes=['PyQt5', 'PyQt6', 'PySide2', 'tkinter', 'numpy', 'pytest',
+                       'PySide6.QtNetwork', 'ssl', '_ssl', '_hashlib'], noarchive=False)
 allowed_plugins = {'qwindows.dll', 'qoffscreen.dll', 'qico.dll'}
-unused_qt = {'qt6pdf.dll', 'qt6virtualkeyboard.dll', 'qt6quick.dll', 'qt6opengl.dll', 'qt6svg.dll'}
+unused_qt = {'qt6pdf.dll', 'qt6virtualkeyboard.dll', 'qt6quick.dll', 'qt6opengl.dll',
+             'qt6svg.dll', 'qt6network.dll'}
+# English uses Qt's source strings; only Simplified Chinese needs a catalog.
+# Update this list alongside the explicit translation resources when adding locales.
+allowed_translations = {'qtbase_zh_cn.qm'}
 
 def keep_binary(entry):
     name = entry[0].replace('\\', '/').lower()
     base = name.rsplit('/', 1)[-1]
+    if name.startswith('pyside6/translations/') and base not in allowed_translations:
+        return False
     if '/plugins/' in name and base not in allowed_plugins:
         return False
     if base in unused_qt or base.startswith('qt6qml'):
@@ -44,6 +54,7 @@ def keep_binary(entry):
     return True
 
 a.binaries = [entry for entry in a.binaries if keep_binary(entry)]
+a.datas = [entry for entry in a.datas if keep_binary(entry)]
 pyz = PYZ(a.pure)
 exe_options = dict(name='SimpleBoard', debug=False, bootloader_ignore_signals=False,
                    strip=False, upx=False, console=bool(os.environ.get('QBOARD_DEBUG_CONSOLE')),

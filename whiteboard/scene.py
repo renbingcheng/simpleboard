@@ -13,7 +13,18 @@ from PySide6.QtGui import QPainterPath, QUndoCommand, QUndoStack
 
 from .geometry import (clear_geometry_cache, conservative_stroke_bounds, erase_stroke, eraser_chunks,
                        seed_visible_path, stroke_bounds, visible_path)
-from .models import BoardDocument, EraseMask, Stroke
+from .images import ImageError, MAX_IMAGE_WORLD_SIZE, MIN_IMAGE_WORLD_SIZE, image_rect
+from .models import BoardDocument, BoardImage, EraseMask, Stroke
+
+
+def _validate_image_geometry(item: BoardImage) -> None:
+    """Keep committed edits serializable without decoding pixels during edits."""
+    for coordinate in (item.x, item.y, item.width, item.height):
+        if (isinstance(coordinate, bool) or not isinstance(coordinate, (int, float))
+                or not math.isfinite(coordinate) or abs(coordinate) > MAX_IMAGE_WORLD_SIZE):
+            raise ImageError(tr('图片位置或尺寸超出有效范围。'))
+    if item.width < MIN_IMAGE_WORLD_SIZE or item.height < MIN_IMAGE_WORLD_SIZE:
+        raise ImageError(tr('图片位置或尺寸超出有效范围。'))
 
 
 class SpatialIndex:
@@ -68,15 +79,17 @@ class SpatialIndex:
 
 
 class _SceneCommand(QUndoCommand):
-    def __init__(self, scene: Scene, text: str, before: list[Stroke], after: list[Stroke], dirty: QRectF | None):
+    def __init__(self, scene: Scene, text: str, before: list[Stroke], after: list[Stroke], dirty: QRectF | None,
+                 before_images: list[BoardImage] | None = None, after_images: list[BoardImage] | None = None):
         super().__init__(text)
         self.scene, self.before, self.after, self.dirty = scene, before, after, dirty
+        self.before_images, self.after_images = before_images, after_images
 
     def redo(self) -> None:
-        self.scene._apply(self.after, self.dirty)
+        self.scene._apply(self.after, self.dirty, self.after_images)
 
     def undo(self) -> None:
-        self.scene._apply(self.before, self.dirty)
+        self.scene._apply(self.before, self.dirty, self.before_images)
 
 
 class Scene(QObject):
@@ -90,9 +103,19 @@ class Scene(QObject):
         self._index = SpatialIndex()
         self._strokes: dict[str, Stroke] = {}
         self._order: dict[str, int] = {}
-        self._apply(self.document.strokes, None)
+        self._image_index = SpatialIndex()
+        self._images: dict[str, BoardImage] = {}
+        self._image_order: dict[str, int] = {}
+        self._apply(self.document.strokes, None, self.document.images)
 
-    def _apply(self, strokes: list[Stroke], dirty: QRectF | None) -> None:
+    def _apply(self, strokes: list[Stroke], dirty: QRectF | None,
+               images: list[BoardImage] | None = None) -> None:
+        # A stroke-only undo must preserve image state. Mixed transactions pass
+        # both collections and replace them atomically before notifying views.
+        effective_images = self.document.images if images is None else images
+        ids = [stroke.id for stroke in strokes] + [item.id for item in effective_images]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Board item IDs must be unique")
         replacements = {stroke.id: stroke for stroke in strokes}
         for key, old in self._strokes.items():
             if key not in replacements or replacements[key] is not old:
@@ -103,6 +126,17 @@ class Scene(QObject):
         self.document.strokes = list(strokes)
         self._strokes = replacements
         self._order = {stroke.id: i for i, stroke in enumerate(strokes)}
+        if images is not None:
+            replacements_images = {item.id: item for item in images}
+            for key, old in self._images.items():
+                if key not in replacements_images or replacements_images[key] is not old:
+                    self._image_index.remove(key)
+            for key, item in replacements_images.items():
+                if self._images.get(key) is not item:
+                    self._image_index.insert(key, image_rect(item))
+            self.document.images = list(images)
+            self._images = replacements_images
+            self._image_order = {item.id: i for i, item in enumerate(images)}
         self.changed.emit(dirty)
 
     def reset(self, document: BoardDocument) -> None:
@@ -111,7 +145,9 @@ class Scene(QObject):
         self.document = document
         self._index = SpatialIndex()
         self._strokes = {}
-        self._apply(document.strokes, None)
+        self._image_index = SpatialIndex()
+        self._images = {}
+        self._apply(document.strokes, None, document.images)
         self.undo_stack.setClean()
 
     def get(self, stroke_id: str) -> Stroke | None:
@@ -121,19 +157,37 @@ class Scene(QObject):
         keys = self._index.query(rect)
         return [self._strokes[key] for key in sorted(keys, key=self._order.__getitem__)]
 
-    def _commit(self, label: str, after: list[Stroke], dirty: QRectF | None) -> None:
-        self.undo_stack.push(_SceneCommand(self, label, list(self.document.strokes), after, dirty))
+    def get_image(self, image_id: str) -> BoardImage | None:
+        return self._images.get(image_id)
+
+    def query_images(self, rect: QRectF) -> list[BoardImage]:
+        keys = self._image_index.query(rect)
+        return [self._images[key] for key in sorted(keys, key=self._image_order.__getitem__)]
+
+    def _commit(self, label: str, after: list[Stroke], dirty: QRectF | None,
+                after_images: list[BoardImage] | None = None) -> None:
+        before_images = list(self.document.images) if after_images is not None else None
+        self.undo_stack.push(_SceneCommand(self, label, list(self.document.strokes), after, dirty,
+                                          before_images, after_images))
 
     def add_stroke(self, stroke: Stroke, cached_path: QPainterPath | None = None) -> None:
         if not stroke.samples:
             return
-        if stroke.id in self._strokes:
-            raise ValueError("Stroke IDs must be unique")
+        if stroke.id in self._strokes or stroke.id in self._images:
+            raise ValueError("Board item IDs must be unique")
         # A live input builder may still hold the passed sample list or brush.
         stroke = deepcopy(stroke)
         if cached_path is not None:
             seed_visible_path(stroke, cached_path)
         self._commit(tr('书写'), self.document.strokes + [stroke], stroke_bounds(stroke))
+
+    def add_image(self, item: BoardImage) -> None:
+        if item.id in self._strokes or item.id in self._images:
+            raise ValueError("Board item IDs must be unique")
+        item = deepcopy(item)
+        _validate_image_geometry(item)
+        rect = image_rect(item)
+        self._commit(tr('插入图片'), list(self.document.strokes), rect, self.document.images + [item])
 
     def erase(self, points: list[tuple[float, float]], radius: float, whole: bool = False) -> None:
         sweeps = list(eraser_chunks(points, radius))
@@ -220,12 +274,68 @@ class Scene(QObject):
             dirty = dirty.united(stroke_bounds(stroke))
         self._commit(tr('删除笔迹'), [s for s in self.document.strokes if s.id not in keys], dirty)
 
+    def move_items(self, ids, dx: float, dy: float) -> None:
+        keys = set(ids)
+        if not all(math.isfinite(value) for value in (dx, dy)):
+            raise ValueError("Movement must be finite")
+        if not keys or (abs(dx) < 1e-12 and abs(dy) < 1e-12):
+            return
+        strokes = []
+        images = []
+        dirty = QRectF()
+        changed = False
+        for stroke in self.document.strokes:
+            if stroke.id in keys:
+                dirty = dirty.united(stroke_bounds(stroke))
+                stroke = replace(stroke, offset_x=stroke.offset_x + dx, offset_y=stroke.offset_y + dy)
+                dirty = dirty.united(stroke_bounds(stroke))
+                changed = True
+            strokes.append(stroke)
+        for item in self.document.images:
+            if item.id in keys:
+                dirty = dirty.united(image_rect(item))
+                item = replace(item, x=item.x + dx, y=item.y + dy)
+                _validate_image_geometry(item)
+                dirty = dirty.united(image_rect(item))
+                changed = True
+            images.append(item)
+        if changed:
+            self._commit(tr('移动对象'), strokes, dirty, images)
+
+    def delete_items(self, ids) -> None:
+        keys = set(ids)
+        removed_strokes = [stroke for stroke in self.document.strokes if stroke.id in keys]
+        removed_images = [item for item in self.document.images if item.id in keys]
+        if not removed_strokes and not removed_images:
+            return
+        dirty = QRectF()
+        for stroke in removed_strokes:
+            dirty = dirty.united(stroke_bounds(stroke))
+        for item in removed_images:
+            dirty = dirty.united(image_rect(item))
+        self._commit(tr('删除对象'), [stroke for stroke in self.document.strokes if stroke.id not in keys],
+                     dirty, [item for item in self.document.images if item.id not in keys])
+
+    def resize_image(self, image_id: str, rect: QRectF) -> None:
+        item = self.get_image(image_id)
+        if item is None:
+            return
+        previous_rect = image_rect(item)
+        if previous_rect == rect:
+            return
+        resized = replace(item, x=rect.x(), y=rect.y(), width=rect.width(), height=rect.height())
+        _validate_image_geometry(resized)
+        after = [resized if candidate.id == image_id else candidate for candidate in self.document.images]
+        self._commit(tr('缩放图片'), list(self.document.strokes), previous_rect.united(rect), after)
+
     def clear(self) -> None:
-        if self.document.strokes:
-            self._commit(tr('清空画布'), [], None)
+        if self.document.strokes or self.document.images:
+            self._commit(tr('清空画布'), [], None, [])
 
     def bounds(self) -> QRectF:
         result = QRectF()
         for stroke in self.document.strokes:
             result = result.united(stroke_bounds(stroke))
+        for item in self.document.images:
+            result = result.united(image_rect(item))
         return result

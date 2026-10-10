@@ -12,7 +12,7 @@ import zipfile
 
 from whiteboard.models import Brush, EraseMask, InkSample, Stroke
 from whiteboard.settings import AppSettings
-from whiteboard.storage import (DocumentError, brush_from_dict, document_from_dict,
+from whiteboard.storage import (FORMAT_VERSION, DocumentError, brush_from_dict, document_from_dict,
                                 document_to_dict, load_document, load_snapshot,
                                 save_document, save_snapshot, validate_snapshot)
 
@@ -60,7 +60,8 @@ class PressureStorageTests(unittest.TestCase):
         original_bytes = self.path.read_bytes()
         document = load_document(self.path)
         expected = json.loads(LEGACY_JSON)
-        expected["version"] = 2
+        expected["version"] = FORMAT_VERSION
+        expected["images"] = []
         expected["strokes"][0]["brush"]["render_profile"] = "legacy-v1"
         expected["strokes"][0]["brush"]["input_scale"] = 1.0
         self.assertEqual(document_to_dict(document), expected)
@@ -78,12 +79,12 @@ class PressureStorageTests(unittest.TestCase):
                 with self.assertRaises(DocumentError):
                     validate_snapshot(value)
 
-    def test_writer_uses_v2_and_mixed_profiles_survive_roundtrip(self):
+    def test_writer_uses_current_format_and_mixed_profiles_survive_roundtrip(self):
         document = self.mixed_document()
         expected = document_to_dict(document)
         save_document(self.path, document)
         serialized = load_snapshot(self.path)
-        self.assertEqual(serialized["version"], 2)
+        self.assertEqual(serialized["version"], FORMAT_VERSION)
         self.assertEqual([stroke["brush"]["render_profile"] for stroke in serialized["strokes"]],
                          ["legacy-v1", "pressure-v2"])
         self.assertEqual([stroke["brush"]["input_scale"] for stroke in serialized["strokes"]], [1.0, 2.5])
@@ -183,7 +184,7 @@ class PressureStorageTests(unittest.TestCase):
 
     def test_noninteger_and_unsupported_document_versions_remain_rejected(self):
         value = document_to_dict(self.mixed_document())
-        for version in (True, 1.0, 2.0, "2", 0, 3, None):
+        for version in (True, 1.0, 2.0, "2", 0, FORMAT_VERSION + 1, None):
             with self.subTest(version=version):
                 value["version"] = version
                 with self.assertRaises(DocumentError):

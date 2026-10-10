@@ -48,9 +48,22 @@ class Stroke:
 
 
 @dataclass(slots=True)
+class BoardImage:
+    """A self-contained PNG placed in logical world coordinates."""
+
+    png_data: bytes
+    x: float
+    y: float
+    width: float
+    height: float
+    id: str = field(default_factory=lambda: str(uuid4()))
+
+
+@dataclass(slots=True)
 class BoardDocument:
     strokes: list[Stroke] = field(default_factory=list)
     view_scale: float = 1.0
     view_offset_x: float = 0.0
     view_offset_y: float = 0.0
     background: str = "#FFFFFF"
+    images: list[BoardImage] = field(default_factory=list)

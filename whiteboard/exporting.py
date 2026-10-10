@@ -12,7 +12,7 @@ from PySide6.QtGui import QColor, QImage, QPageLayout, QPageSize, QPainter, QPdf
 
 from . import APP_DISPLAY_NAME
 from .geometry import visible_path
-from .renderer import paint_stroke
+from .renderer import ImageRenderer, paint_stroke
 from .storage import DocumentError
 
 
@@ -41,6 +41,9 @@ def render_document(painter: QPainter, scene, size, scale: float, offset: QPoint
         painter.fillRect(viewport, QColor(scene.document.background))
         painter.translate(offset)
         painter.scale(scale, scale)
+        image_renderer = ImageRenderer()
+        for image in scene.query_images(world):
+            image_renderer.paint(painter, image)
         for stroke in scene.query(world):
             paint_stroke(painter, stroke, visible_path(stroke))
     finally:

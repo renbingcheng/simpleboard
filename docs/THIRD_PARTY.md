@@ -16,7 +16,7 @@ SimpleBoard 自身代码采用 **GPL-3.0-only**，见根目录 [`LICENSE`](../LI
 
 Qt/PySide6 文件头提供多种许可选项，但不能据此认定所有 Qt 模块均有 LGPL。现用库可参见 6.11.1 标签下的 [Qt Core 文件头](https://github.com/qt/qtbase/blob/v6.11.1/src/corelib/kernel/qobject.cpp)、[PySide 文件头](https://github.com/pyside/pyside-setup/blob/v6.11.1/sources/pyside6/libpyside/pyside.cpp) 和 [Shiboken 文件头](https://github.com/pyside/pyside-setup/blob/v6.11.1/sources/shiboken6/libshiboken/basewrapper.cpp)。新增模块、插件或第三方素材时需单独核对。商业许可引用或 Qt exception 的存在，不表示项目取得了商业授权，也不把例外扩大到未受其覆盖的文件。
 
-`licenses/qtsvg/` 和 `licenses/qtimageformats/` 保留 [qtsvg v6.11.1](https://github.com/qt/qtsvg/tree/v6.11.1)、[qtimageformats v6.11.1](https://github.com/qt/qtimageformats/tree/v6.11.1) 声明。当前 spec 排除 Qt6Svg、Qt6Pdf 及多数可选插件；这些是偏保守的上游材料集合，不能反推二进制实际组件。pytest 等开发依赖也不应直接列为应用运行库。发行时需核对实际 DLL、PYD、运行 hooks、插件与 Windows 运行时文件。
+`licenses/qtsvg/` 和 `licenses/qtimageformats/` 保留 [qtsvg v6.11.1](https://github.com/qt/qtsvg/tree/v6.11.1)、[qtimageformats v6.11.1](https://github.com/qt/qtimageformats/tree/v6.11.1) 声明。1.0.7 的 spec 明确保留 `qwindows.dll`、`qoffscreen.dll`、`qico.dll` 和用于 JPEG 导入的 `qjpeg.dll`，Qt 翻译仅保留 `qtbase_zh_CN.qm`；英文使用 Qt 原文。当前 spec 排除 Qt6Svg、Qt6Pdf、Qt6Network、Python SSL/OpenSSL 运行组件及多数可选插件；这些是偏保守的上游材料集合，不能反推二进制实际组件。pytest 等开发依赖也不应直接列为应用运行库。发行时需核对实际 DLL、PYD、运行 hooks、插件与 Windows 运行时文件。
 
 PyInstaller 的例外允许其规定范围内的 bootloader 随应用组合分发，**不豁免其他依赖的义务**。单独分发或修改其代码，与仅使用工具打包的条件不同。参见 [6.12.0 官方说明](https://pyinstaller.org/en/v6.12.0/license.html) 和本地完整 COPYING。
 

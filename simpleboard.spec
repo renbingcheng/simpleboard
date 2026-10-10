@@ -33,7 +33,7 @@ a = Analysis([str(root / 'main.py')], pathex=[str(root)], binaries=[],
              # neither; hashlib can use Python's built-in hash implementations.
              excludes=['PyQt5', 'PyQt6', 'PySide2', 'tkinter', 'numpy', 'pytest',
                        'PySide6.QtNetwork', 'ssl', '_ssl', '_hashlib'], noarchive=False)
-allowed_plugins = {'qwindows.dll', 'qoffscreen.dll', 'qico.dll'}
+allowed_plugins = {'qwindows.dll', 'qoffscreen.dll', 'qico.dll', 'qjpeg.dll'}
 unused_qt = {'qt6pdf.dll', 'qt6virtualkeyboard.dll', 'qt6quick.dll', 'qt6opengl.dll',
              'qt6svg.dll', 'qt6network.dll'}
 # English uses Qt's source strings; only Simplified Chinese needs a catalog.

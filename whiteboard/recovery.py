@@ -75,7 +75,7 @@ class RecoveryManager(QObject):
         # snapshot without a 200,000-sample deepcopy or serialization pause.
         # Providers must honor the same invariant while a save is in flight.
         document = self._provider()
-        detached = replace(document, strokes=list(document.strokes))
+        detached = replace(document, strokes=list(document.strokes), images=list(document.images))
         return detached, str(self.source_path) if self.source_path else None
 
     @Slot()

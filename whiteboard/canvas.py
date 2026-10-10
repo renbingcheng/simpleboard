@@ -16,8 +16,10 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from .geometry import IncrementalStrokeBuilder, erase_path, visible_path
 from .input_diagnostics import InputDiagnostics
-from .models import Brush, EraseMask, InkSample, Stroke
-from .renderer import TileRenderer, paint_stroke
+from .models import BoardImage, Brush, EraseMask, InkSample, Stroke
+from .images import (MAX_IMAGE_WORLD_SIZE, MIN_IMAGE_WORLD_SIZE, image_rect,
+                     image_size, load_image, validate_images)
+from .renderer import ImageRenderer, TileRenderer, paint_stroke
 
 
 class Canvas(QWidget):
@@ -31,6 +33,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.scene = scene
         self.renderer = TileRenderer(scene)
+        self.image_renderer = ImageRenderer()
         self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setTabletTracking(True)
@@ -72,6 +75,11 @@ class Canvas(QWidget):
         self._lasso_points: list[QPointF] = []
         self._move_start = QPointF()
         self._move_delta = QPointF()
+        self._resize_image_id = ""
+        self._resize_rect = QRectF()
+        self._resize_original = QRectF()
+        self._resize_corner = 0
+        self._resize_pointer_offset = QPointF()
         self._pan_start = QPointF()
         self._pan_offset = QPointF()
         self._touch_ids: tuple[int, ...] = ()
@@ -113,11 +121,13 @@ class Canvas(QWidget):
                           self.view_offset.x(), self.view_offset.y())
 
     def set_tool(self, tool):
-        if tool not in {"pen", "highlighter", "eraser", "lasso", "pan"}:
+        if tool not in {"pen", "highlighter", "eraser", "lasso", "select", "pan"}:
             raise ValueError("Unknown canvas tool")
         self.finish_interaction()
         self.tool = tool
-        if tool not in {"lasso", "pan"}:
+        if tool in {"lasso", "select"}:
+            self._filter_selection(tool)
+        elif tool != "pan":
             self.clear_selection()
         self._set_temporary_tool("")
         self._update_cursor()
@@ -131,6 +141,44 @@ class Canvas(QWidget):
         self.finish_interaction()
         self.eraser_radius = max(2.0, min(100.0, float(radius)))
         self.eraser_whole = bool(whole)
+
+    def insert_image_path(self, path):
+        """Embed pixels and create one undoable image, initially in view."""
+        data = load_image(path)
+        size = image_size(data)
+        factor = min(1.0, max(32, self.width() * 0.65) / size.width(),
+                     max(32, self.height() * 0.65) / size.height())
+        factor = max(factor, MIN_IMAGE_WORLD_SIZE * self.view_scale / min(size.width(), size.height()))
+        width, height = size.width() * factor / self.view_scale, size.height() * factor / self.view_scale
+        center = self.screen_to_world(QPointF(self.rect().center()))
+        item = BoardImage(png_data=data, x=center.x() - width / 2, y=center.y() - height / 2,
+                          width=width, height=height)
+        # Validate budget before committing or finishing any active edit.
+        validate_images([*self.scene.document.images, item])
+        self.finish_interaction()
+        self.scene.add_image(item)
+        self.selection_ids = {item.id}
+        self.selection_changed.emit(1)
+        self.update()
+        return item.id
+
+    def _selected_image(self):
+        if len(self.selection_ids) == 1:
+            return self.scene.get_image(next(iter(self.selection_ids)))
+        return None
+
+    @staticmethod
+    def _image_corners(rect):
+        return (rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft())
+
+    def _image_resize_handle(self, position):
+        item = self._selected_image()
+        if item is not None:
+            for index, corner in enumerate(self._image_corners(image_rect(item))):
+                delta = self.world_to_screen(corner) - position
+                if abs(delta.x()) <= 11 and abs(delta.y()) <= 11:
+                    return index
+        return None
 
     def set_diagnostics_enabled(self, enabled):
         self._diagnostics_enabled = bool(enabled)
@@ -238,12 +286,13 @@ class Canvas(QWidget):
 
     @property
     def has_active_edit(self):
-        return self.has_active_ink or self._interaction in {"erase", "move"}
+        return self.has_active_ink or self._interaction in {"erase", "move", "resize-image"}
 
     def snapshot_document(self):
         """Capture the visible edit for recovery without splitting its undo step."""
         self.sync_view_to_document()
         strokes = list(self.scene.document.strokes)
+        images = list(self.scene.document.images)
         if self.has_active_ink:
             strokes.append(Stroke(samples=list(self._builder.samples), brush=replace(self._active_brush),
                                   id=self._active_stroke_id))
@@ -263,12 +312,19 @@ class Canvas(QWidget):
             strokes = [replace(s, offset_x=s.offset_x+self._move_delta.x(),
                                offset_y=s.offset_y+self._move_delta.y())
                        if s.id in self.selection_ids else s for s in strokes]
-        return replace(self.scene.document, strokes=strokes)
+            images = [replace(item, x=item.x + self._move_delta.x(), y=item.y + self._move_delta.y())
+                      if item.id in self.selection_ids else item for item in images]
+        elif self._interaction == "resize-image":
+            rect = self._resize_rect
+            images = [replace(item, x=rect.x(), y=rect.y(), width=rect.width(), height=rect.height())
+                      if item.id == self._resize_image_id else item for item in images]
+        return replace(self.scene.document, strokes=strokes, images=images)
 
     def load_view_from_document(self):
         self.finish_interaction()
         doc = self.scene.document
         self.set_view(doc.view_scale, QPointF(doc.view_offset_x, doc.view_offset_y))
+        self.image_renderer.clear()
         self.clear_selection()
 
     def clear_selection(self):
@@ -280,8 +336,17 @@ class Canvas(QWidget):
     def delete_selection(self):
         self.finish_interaction()
         if self.selection_ids:
-            self.scene.delete_strokes(set(self.selection_ids))
+            self.scene.delete_items(set(self.selection_ids))
             self.clear_selection()
+
+    def _filter_selection(self, tool):
+        """Keep image editing separate from ink, including temporary pen tools."""
+        lookup = self.scene.get_image if tool == "select" else self.scene.get
+        selected = {sid for sid in self.selection_ids if lookup(sid) is not None}
+        if selected != self.selection_ids:
+            self.selection_ids = selected
+            self.selection_changed.emit(len(selected))
+            self.update()
 
     def _selection_bounds(self):
         bounds = QRectF()
@@ -289,11 +354,16 @@ class Canvas(QWidget):
             stroke = self.scene.get(sid)
             if stroke is not None:
                 bounds = bounds.united(visible_path(stroke).boundingRect())
+            else:
+                item = self.scene.get_image(sid)
+                if item is not None:
+                    bounds = bounds.united(image_rect(item))
         return bounds
 
     def _scene_changed(self, rect):
         if self.selection_ids:
-            alive = {sid for sid in self.selection_ids if self.scene.get(sid) is not None}
+            alive = {sid for sid in self.selection_ids
+                     if self.scene.get(sid) is not None or self.scene.get_image(sid) is not None}
             if alive != self.selection_ids:
                 self.selection_ids = alive
                 self.selection_changed.emit(len(alive))
@@ -348,6 +418,21 @@ class Canvas(QWidget):
         self._interaction_tool = tool
         self._last_recovery_notify = 0.0
         self._last_world = self.screen_to_world(position)
+        if tool in {"pen", "highlighter", "lasso", "select"}:
+            # Barrel-button overrides bypass set_tool. Filter at contact start
+            # too, so lasso/ink can never drag a selected image.
+            self._filter_selection(tool)
+        if tool == "select":
+            handle = self._image_resize_handle(position)
+            if handle is not None:
+                item = self._selected_image()
+                self._interaction = "resize-image"
+                self._resize_image_id = item.id
+                self._resize_rect = self._resize_original = image_rect(item)
+                self._resize_corner = handle
+                self._resize_pointer_offset = self._last_world - self._image_corners(self._resize_original)[handle]
+                self._notify_active_edit()
+                return
         if (tool in {"pen", "highlighter", "lasso"} and self.selection_ids
                 and self._selection_bounds().adjusted(-6/self.view_scale, -6/self.view_scale,
                                                        6/self.view_scale, 6/self.view_scale).contains(self._last_world)):
@@ -357,6 +442,23 @@ class Canvas(QWidget):
             self._move_start = QPointF(self._last_world)
             self._move_delta = QPointF()
             self._notify_active_edit()
+            return
+        if tool == "select":
+            # Only the pointer tool can hit images. Ignore the ink above them
+            # and choose the topmost image at the actual contact position.
+            candidates = self.scene.query_images(QRectF(self._last_world.x() - 0.1,
+                                                        self._last_world.y() - 0.1, 0.2, 0.2))
+            for item in reversed(candidates):
+                if image_rect(item).contains(self._last_world):
+                    self.selection_ids = {item.id}
+                    self.selection_changed.emit(1)
+                    self._interaction = "move"
+                    self._move_start = QPointF(self._last_world)
+                    self._move_delta = QPointF()
+                    self._notify_active_edit()
+                    self.update()
+                    return
+            self.clear_selection()
             return
         if tool in {"pen", "highlighter"}:
             self.clear_selection()
@@ -407,7 +509,46 @@ class Canvas(QWidget):
                 self._lasso_points.append(point)
                 self.update()
         elif self._interaction == "move":
-            self._move_delta = point - self._move_start
+            delta = point - self._move_start
+            # Keep both live recovery snapshots and the eventual mixed-object
+            # transaction inside the document's serializable coordinate range.
+            selected = [item for item in self.scene.document.images if item.id in self.selection_ids]
+            if selected:
+                limit = MAX_IMAGE_WORLD_SIZE
+                delta.setX(max(max(-limit-item.x for item in selected),
+                               min(min(limit-item.x for item in selected), delta.x())))
+                delta.setY(max(max(-limit-item.y for item in selected),
+                               min(min(limit-item.y for item in selected), delta.y())))
+            self._move_delta = delta
+            self._notify_active_edit()
+            self.update()
+        elif self._interaction == "resize-image":
+            original = self._resize_original
+            anchor = self._image_corners(original)[(self._resize_corner + 2) % 4]
+            sign_x = -1 if self._resize_corner in (0, 3) else 1
+            sign_y = -1 if self._resize_corner in (0, 1) else 1
+            target = point - self._resize_pointer_offset
+            factor = max(sign_x * (target.x() - anchor.x()) / original.width(),
+                         sign_y * (target.y() - anchor.y()) / original.height())
+            minimum = MIN_IMAGE_WORLD_SIZE / min(original.width(), original.height())
+            maximum = MAX_IMAGE_WORLD_SIZE / max(original.width(), original.height())
+            for sign, coordinate, extent in ((sign_x, anchor.x(), original.width()),
+                                              (sign_y, anchor.y(), original.height())):
+                if sign < 0:
+                    minimum = max(minimum, (coordinate - MAX_IMAGE_WORLD_SIZE) / extent)
+                    maximum = min(maximum, (coordinate + MAX_IMAGE_WORLD_SIZE) / extent)
+            minimum = max(minimum, min(maximum, 12 / self.view_scale / min(original.width(), original.height())))
+            factor = max(min(minimum, maximum), min(maximum, factor))
+            opposite = anchor + QPointF(sign_x * original.width() * factor,
+                                         sign_y * original.height() * factor)
+            self._resize_rect = QRectF(anchor, opposite).normalized()
+            # Roundoff at large coordinates must not create a just-outside
+            # position or a sub-minimum extent in the recovery snapshot.
+            self._resize_rect = QRectF(
+                max(-MAX_IMAGE_WORLD_SIZE, min(MAX_IMAGE_WORLD_SIZE, self._resize_rect.x())),
+                max(-MAX_IMAGE_WORLD_SIZE, min(MAX_IMAGE_WORLD_SIZE, self._resize_rect.y())),
+                max(MIN_IMAGE_WORLD_SIZE, min(MAX_IMAGE_WORLD_SIZE, self._resize_rect.width())),
+                max(MIN_IMAGE_WORLD_SIZE, min(MAX_IMAGE_WORLD_SIZE, self._resize_rect.height())))
             self._notify_active_edit()
             self.update()
         elif self._interaction == "pan":
@@ -460,7 +601,11 @@ class Canvas(QWidget):
             delta = self._move_delta
             self._move_delta = QPointF()
             if delta.manhattanLength() > 1e-8:
-                self.scene.move_strokes(set(self.selection_ids), delta.x(), delta.y())
+                self.scene.move_items(set(self.selection_ids), delta.x(), delta.y())
+        elif kind == "resize-image":
+            if self._resize_image_id:
+                self.scene.resize_image(self._resize_image_id, self._resize_rect)
+            self._resize_image_id = ""
         self._source = ""
         if kind or had_gesture:
             self._update_cursor()
@@ -486,6 +631,10 @@ class Canvas(QWidget):
 
     def _update_cursor(self):
         tool = self._temporary_tool or self.tool
+        handle = self._image_resize_handle(self._last_pointer) if tool == "select" else None
+        if handle is not None:
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor if handle in (0, 2) else Qt.CursorShape.SizeBDiagCursor)
+            return
         self.setCursor(Qt.CursorShape.OpenHandCursor if tool == "pan" else
                        Qt.CursorShape.CrossCursor if tool in {"lasso", "eraser"} else Qt.CursorShape.ArrowCursor)
 
@@ -634,6 +783,11 @@ class Canvas(QWidget):
         tool = self.tool
         if is_tail or continuing_tail:
             tool = "eraser"
+        elif (self.tool == "select" and event.type() == QEvent.Type.TabletMove
+              and self._source == "pen" and self._interaction_tool == "lasso"):
+            # Releasing the barrel button before lifting must not turn the
+            # remainder of an ink lasso into a drag of the background image.
+            tool = "lasso"
         elif event.buttons() & Qt.MouseButton.RightButton:
             tool = "lasso"
         self._set_temporary_tool(tool if tool != self.tool else "")
@@ -676,6 +830,8 @@ class Canvas(QWidget):
         self._input_ms.append((time.perf_counter()-started)*1000)
         if tool == "eraser":
             self._update_eraser_cursor(previous_pointer)
+        elif tool == "select" and not self._interaction:
+            self._update_cursor()
 
     def _update_eraser_cursor(self, previous):
         margin = self.eraser_radius + 3
@@ -712,6 +868,8 @@ class Canvas(QWidget):
         self._emit_diagnostics("mouse", 1.0)
         if self.tool == "eraser":
             self._update_eraser_cursor(previous_pointer)
+        elif not self._interaction:
+            self._update_cursor()
         event.accept()
 
     def mouseReleaseEvent(self, event):
@@ -852,6 +1010,21 @@ class Canvas(QWidget):
         painter.fillRect(viewport, QColor(self.scene.document.background))
         if allow_preview:
             self._paint_grid(painter)
+        # Pictures form a separate lower layer. Eraser previews remove only
+        # ink, so they reveal the original picture without punching through it.
+        painter.save()
+        painter.setTransform(self._transform())
+        world = self._transform().inverted()[0].mapRect(viewport)
+        for item in self.scene.document.images:
+            rect = image_rect(item)
+            if allow_preview and item.id in self.selection_ids:
+                if self._interaction == "move":
+                    rect = rect.translated(self._move_delta)
+                elif self._interaction == "resize-image" and item.id == self._resize_image_id:
+                    rect = self._resize_rect
+            if rect.intersects(world):
+                self.image_renderer.paint(painter, item, rect)
+        painter.restore()
         if allow_preview and self._interaction == "erase":
             self._update_erase_preview()
             painter.drawImage(QPointF(), self._erase_layer)
@@ -900,9 +1073,18 @@ class Canvas(QWidget):
             painter.drawPath(path)
         if self.selection_ids:
             bounds = self._selection_bounds().translated(self._move_delta if self._interaction == "move" else QPointF())
+            if self._interaction == "resize-image":
+                bounds = self._resize_rect
             painter.setBrush(QColor(64, 123, 240, 12))
             painter.drawRoundedRect(bounds.adjusted(-5/self.view_scale, -5/self.view_scale,
                                                     5/self.view_scale, 5/self.view_scale), 3, 3)
+            if (self._temporary_tool or self.tool) == "select" and self._selected_image() is not None:
+                painter.setPen(QPen(QColor("#407BF0"), 1.4/self.view_scale))
+                painter.setBrush(QColor("#FFFFFF"))
+                radius = 5 / self.view_scale
+                for corner in self._image_corners(bounds):
+                    painter.drawRect(QRectF(corner.x() - radius, corner.y() - radius,
+                                            radius * 2, radius * 2))
         painter.restore()
         if (self._temporary_tool or self.tool) == "eraser" and self._pointer_inside:
             painter.setPen(QPen(QColor("#718096"), 1.2))

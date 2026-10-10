@@ -1,6 +1,6 @@
 """SimpleBoard: a local-first, pen-focused Windows whiteboard."""
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 
 APP_DISPLAY_NAME = "SimpleBoard"
 

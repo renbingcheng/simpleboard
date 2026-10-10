@@ -9,7 +9,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath
 
 from .geometry import visible_path
-from .models import Stroke
+from .models import BoardImage, Stroke
+from .images import decode_image, image_rect
 from .scene import Scene
 
 
@@ -23,6 +24,44 @@ def paint_stroke(painter: QPainter, stroke: Stroke, path: QPainterPath | None = 
     painter.setBrush(color)
     painter.drawPath(visible_path(stroke) if path is None else path)
     painter.restore()
+
+
+class ImageRenderer:
+    """Decoded pixels are bounded separately from ink tiles and undo history."""
+    def __init__(self, budget_bytes: int = 128 * 1024 * 1024):
+        self.budget_bytes = budget_bytes
+        self.cache_bytes = 0
+        self._images: OrderedDict[int, tuple[bytes, QImage, int]] = OrderedDict()
+
+    def clear(self):
+        self._images.clear()
+        self.cache_bytes = 0
+
+    def pixels(self, image: BoardImage) -> QImage:
+        # Retain the bytes strongly so object IDs cannot be reused in a cache
+        # entry. Moving/resizing an immutable image shares its encoded pixels.
+        key = id(image.png_data)
+        if key in self._images:
+            self._images.move_to_end(key)
+            return self._images[key][1]
+        decoded = decode_image(image.png_data)
+        # Encoded bytes are shared with the document/undo stack, not copied.
+        # The pixel budget fits the document's entire decoded-image budget so
+        # visiting all visible images cannot thrash this LRU on every frame.
+        cost = decoded.sizeInBytes()
+        if cost <= self.budget_bytes:
+            while self._images and self.cache_bytes + cost > self.budget_bytes:
+                _, (_, _, previous) = self._images.popitem(last=False)
+                self.cache_bytes -= previous
+            self._images[key] = (image.png_data, decoded, cost)
+            self.cache_bytes += cost
+        return decoded
+
+    def paint(self, painter: QPainter, image: BoardImage, rect: QRectF | None = None):
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawImage(image_rect(image) if rect is None else rect, self.pixels(image))
+        painter.restore()
 
 
 @dataclass(slots=True)

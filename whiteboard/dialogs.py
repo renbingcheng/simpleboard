@@ -9,7 +9,7 @@ from dataclasses import replace
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QColorDialog, QFrame, QGridLayout,
+    QButtonGroup, QColorDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QPushButton, QSlider, QToolButton,
     QVBoxLayout, QWidget,
 )
@@ -80,6 +80,18 @@ def tool_icon(name: str, color: str = INK, size: int = 28) -> QIcon:
         path = QPainterPath(QPointF(8, 18))
         path.cubicTo(3, 27, 16, 26, 11, 20)
         painter.drawPath(path)
+    elif name == "select":
+        # Build around the shaft axis, then tilt the whole pointer. This keeps
+        # the two shoulders balanced and the narrow shaft edges parallel.
+        painter.save()
+        painter.translate(13, 14)
+        painter.rotate(-30)
+        path = QPainterPath(QPointF(0, -11))
+        for point in ((-8, 3), (-2, 1), (-2, 9), (2, 9), (2, 1), (8, 3)):
+            path.lineTo(*point)
+        path.closeSubpath()
+        painter.drawPath(path)
+        painter.restore()
     elif name in ("undo", "redo"):
         if name == "redo":
             painter.translate(28, 0)
@@ -128,6 +140,15 @@ def tool_icon(name: str, color: str = INK, size: int = 28) -> QIcon:
         path.closeSubpath()
         painter.drawPath(path)
         painter.drawLine(QPointF(4, 14), QPointF(23, 14))
+    elif name == "image":
+        painter.drawRoundedRect(QRectF(3, 5, 22, 18), 2.5, 2.5)
+        painter.drawEllipse(QPointF(18.5, 10), 2, 2)
+        path = QPainterPath(QPointF(3, 19))
+        path.lineTo(9, 12)
+        path.lineTo(16, 20)
+        path.lineTo(20, 16)
+        path.lineTo(25, 21)
+        painter.drawPath(path)
     elif name == "save":
         path = QPainterPath(QPointF(5, 3))
         for point in ((20, 3), (24, 7), (24, 24), (4, 24), (4, 3)):
@@ -157,24 +178,67 @@ def tool_icon(name: str, color: str = INK, size: int = 28) -> QIcon:
 
 
 POPOVER_STYLE = """
-QFrame#toolPopover { background: #FFFFFF; border: 1px solid #DEE5EF; border-radius: 14px; }
-QLabel { color: #24334A; background: transparent; border: none; }
-QLabel#popoverTitle { font-size: 16px; font-weight: 600; }
+QFrame#toolPopover { background: #FFFFFF; border: 1px solid #DEE5EF; border-radius: 16px; }
+QLabel { color: #34435B; background: transparent; border: none; font-size: 12px; }
+QLabel#popoverTitle { color: #202E44; font-size: 16px; font-weight: 600; }
 QLabel#muted { color: #718097; font-size: 11px; }
-QPushButton { background: #F4F6FA; border: 1px solid #E4E9F1; border-radius: 8px; min-height: 44px; padding: 0 12px; color: #24334A; }
-QPushButton:hover { background: #EAF0FD; border-color: #B6CAF8; }
-QPushButton:checked { background: #EAF0FF; border-color: #356AF0; color: #2456C9; }
-QSlider::groove:horizontal { height: 5px; background: #E8EDF5; border-radius: 2px; }
+QLabel#valueBadge { color: #425673; background: #F2F5FA; border-radius: 6px; padding: 3px 8px; }
+QLabel:disabled { color: #9BA6B7; }
+QLabel#valueBadge:disabled { color: #9BA6B7; background: #F7F8FA; }
+QPushButton { background: #F7F9FC; border: 1px solid #E4EAF3; border-radius: 10px; min-height: 44px; padding: 0 12px; color: #34435B; }
+QPushButton:hover { background: #EFF4FF; border-color: #B8CBF2; }
+QPushButton:pressed { background: #E5EDFF; }
+QPushButton:checked { background: #EDF3FF; border-color: #8DAAF2; color: #285AC9; }
+QPushButton:focus { border-color: #356AF0; }
+QSlider::groove:horizontal { height: 4px; background: #E8EDF5; border-radius: 2px; }
 QSlider::sub-page:horizontal { background: #356AF0; border-radius: 2px; }
-QSlider::handle:horizontal { background: #FFFFFF; border: 2px solid #356AF0; width: 19px; margin: -8px 0; border-radius: 10px; }
-QCheckBox { color: #24334A; min-height: 44px; spacing: 10px; }
-QCheckBox::indicator { width: 20px; height: 20px; }
+QSlider::handle:horizontal { background: #FFFFFF; border: 2px solid #356AF0; width: 16px; margin: -8px 0; border-radius: 10px; }
+QSlider::handle:horizontal:hover, QSlider::handle:horizontal:focus { background: #EDF3FF; }
+QSlider::sub-page:horizontal:disabled { background: #D8DFEA; }
+QSlider::handle:horizontal:disabled { border-color: #C9D2E1; background: #F7F9FC; }
 """
+
+
+class ColorSwatch(QToolButton):
+    """A small color chip inside a full-sized touch/keyboard target."""
+
+    def __init__(self, color: str):
+        super().__init__()
+        self.color = QColor(color)
+        self.setFixedSize(44, 44)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        center = QPointF(self.width() / 2, self.height() / 2)
+        if self.underMouse() or self.hasFocus():
+            painter.setPen(QPen(QColor("#A5BCF0"), 1) if self.hasFocus() else Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#F0F4FC"))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 10, 10)
+        if self.isChecked():
+            painter.setPen(QPen(QColor(BLUE), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(center, 19, 19)
+        painter.setPen(QPen(QColor("#D8E0EC"), 1) if self.color.lightness() > 220 else Qt.PenStyle.NoPen)
+        painter.setBrush(self.color)
+        painter.drawEllipse(center, 14.5, 14.5)
+        if self.isChecked():
+            painter.setPen(QPen(QColor(INK if self.color.lightness() > 180 else "#FFFFFF"), 1.8,
+                                Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            path = QPainterPath(center + QPointF(-4, 0))
+            path.lineTo(center + QPointF(-1, 3))
+            path.lineTo(center + QPointF(5, -3))
+            painter.drawPath(path)
+        painter.end()
 
 
 class BrushPopover(QFrame):
     brush_changed = Signal(object)
-    pressure_changed = Signal(bool, float)
+    sensitivity_changed = Signal(float)
 
     def __init__(self, brush: Brush, pressure_enabled: bool,
                  sensitivity: float, parent: QWidget | None = None):
@@ -196,16 +260,10 @@ class BrushPopover(QFrame):
         colors = ("#222222", "#D53D4C", "#EF8534", "#E7B91A", "#22A06B", "#3478E5",
                   "#7254CD", "#CF579B", "#FFFFFF", "#6B7789", "#4EC9CC", "#FFF066")
         for i, color in enumerate(colors):
-            button = QToolButton()
-            button.setFixedSize(44, 44)
-            button.setCheckable(True)
+            button = ColorSwatch(color)
             button.setChecked(QColor(color) == QColor(brush.color))
             button.setToolTip(color)
             button.setAccessibleName(tr('颜色 ') + color)
-            button.setStyleSheet(
-                "QToolButton { background: " + color + "; border: 2px solid #DFE5EE; border-radius: 22px; }"
-                "QToolButton:checked { border: 4px solid #356AF0; }"
-                "QToolButton:hover { border-color: #7598EE; }")
             self.color_group.addButton(button)
             button.clicked.connect(lambda checked=False, c=color: self._set_brush(color=c))
             palette.addWidget(button, i // 6, i % 6)
@@ -213,37 +271,46 @@ class BrushPopover(QFrame):
         custom = QPushButton(tr('自定义颜色…'))
         custom.clicked.connect(self._choose_color)
         layout.addWidget(custom)
+        width_section = QVBoxLayout()
+        width_section.setSpacing(0)
         row = QHBoxLayout()
         row.addWidget(QLabel(tr('粗细')))
+        row.addStretch()
         self.width_value = QLabel()
+        self.width_value.setObjectName("valueBadge")
         self.width_value.setAlignment(Qt.AlignmentFlag.AlignRight)
         row.addWidget(self.width_value)
-        layout.addLayout(row)
+        width_section.addLayout(row)
         self.width_slider = QSlider(Qt.Orientation.Horizontal)
         self.width_slider.setMinimumHeight(44)
         self.width_slider.setRange(10, 480 if brush.kind == "highlighter" else 240)
         self.width_slider.setValue(round(float(brush.width) * 10))
         self.width_value.setText(f"{brush.width:g} px")
         self.width_slider.valueChanged.connect(self._width_changed)
-        layout.addWidget(self.width_slider)
+        width_section.addWidget(self.width_slider)
+        layout.addLayout(width_section)
         if brush.kind != "highlighter":
-            self.pressure_toggle = QCheckBox(tr('启用压感 · 应用于全部画笔'))
-            self.pressure_toggle.setChecked(pressure_enabled)
-            layout.addWidget(self.pressure_toggle)
+            sensitivity_section = QVBoxLayout()
+            sensitivity_section.setSpacing(0)
             pressure_row = QHBoxLayout()
-            pressure_row.addWidget(QLabel(tr('压感灵敏度')))
+            self.sensitivity_title = QLabel(tr('压感灵敏度'))
+            self.sensitivity_title.setEnabled(pressure_enabled)
+            pressure_row.addWidget(self.sensitivity_title)
+            pressure_row.addStretch()
             self.sensitivity_label = QLabel(f"{sensitivity:.1f}×")
+            self.sensitivity_label.setObjectName("valueBadge")
+            self.sensitivity_label.setEnabled(pressure_enabled)
             self.sensitivity_label.setAlignment(Qt.AlignmentFlag.AlignRight)
             pressure_row.addWidget(self.sensitivity_label)
-            layout.addLayout(pressure_row)
+            sensitivity_section.addLayout(pressure_row)
             self.sensitivity_slider = QSlider(Qt.Orientation.Horizontal)
             self.sensitivity_slider.setRange(5, 20)
             self.sensitivity_slider.setValue(round(sensitivity * 10))
             self.sensitivity_slider.setMinimumHeight(44)
             self.sensitivity_slider.setEnabled(pressure_enabled)
-            self.sensitivity_slider.valueChanged.connect(self._pressure_changed)
-            self.pressure_toggle.toggled.connect(self._pressure_changed)
-            layout.addWidget(self.sensitivity_slider)
+            self.sensitivity_slider.valueChanged.connect(self._sensitivity_changed)
+            sensitivity_section.addWidget(self.sensitivity_slider)
+            layout.addLayout(sensitivity_section)
             note = QLabel(tr('轻触细，重按粗；鼠标使用固定粗细。'))
         else:
             note = QLabel(tr('单笔自交不加深，分笔叠画加深。'))
@@ -271,12 +338,10 @@ class BrushPopover(QFrame):
             self.color_group.setExclusive(True)
         self.show()
 
-    def _pressure_changed(self, *_):
-        enabled = self.pressure_toggle.isChecked()
+    def _sensitivity_changed(self, *_):
         sensitivity = self.sensitivity_slider.value() / 10
-        self.sensitivity_slider.setEnabled(enabled)
         self.sensitivity_label.setText(f"{sensitivity:.1f}×")
-        self.pressure_changed.emit(enabled, sensitivity)
+        self.sensitivity_changed.emit(sensitivity)
 
 
 class EraserPopover(QFrame):
@@ -392,7 +457,7 @@ class DiagnosticsPanel(QFrame):
                     text = f"{float(value) * 100:.0f}%"
                 elif key in ("tool", "source"):
                     names = {"pen": "画笔", "highlighter": "荧光笔", "eraser": "橡皮擦",
-                             "lasso": "套索选择", "pan": "移动画布", "mouse": "鼠标",
+                             "lasso": "套索选择", "select": "选择图片", "pan": "移动画布", "mouse": "鼠标",
                              "pinch": "双指缩放", "touch_pan": "单指平移"}
                     text = tr(names.get(str(value), str(value)))
                 else:

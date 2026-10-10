@@ -1,5 +1,5 @@
-VSVersionInfo(ffi=FixedFileInfo(filevers=(1,0,6,0), prodvers=(1,0,6,0), mask=0x3f, flags=0,
+VSVersionInfo(ffi=FixedFileInfo(filevers=(1,0,7,0), prodvers=(1,0,7,0), mask=0x3f, flags=0,
  OS=0x40004, fileType=0x1, subtype=0, date=(0,0)), kids=[StringFileInfo([StringTable('040904B0', [
- StringStruct('FileDescription','SimpleBoard'), StringStruct('FileVersion','1.0.6'),
- StringStruct('ProductName','SimpleBoard'), StringStruct('ProductVersion','1.0.6'),
+ StringStruct('FileDescription','SimpleBoard'), StringStruct('FileVersion','1.0.7'),
+ StringStruct('ProductName','SimpleBoard'), StringStruct('ProductVersion','1.0.7'),
  StringStruct('OriginalFilename','SimpleBoard.exe')])]), VarFileInfo([VarStruct('Translation',[1033,1200])])])

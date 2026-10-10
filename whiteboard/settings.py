@@ -33,6 +33,7 @@ class AppSettings:
         self.sensitivity = 1.0
         self.recent_files: list[str] = []
         self.language = DEFAULT_LANGUAGE
+        self.toolbar_position = "bottom"
         self.load_error: str | None = None
         self._load()
 
@@ -77,11 +78,14 @@ class AppSettings:
         self.eraser_radius, self.sensitivity = eraser_radius, sensitivity
         self.eraser_whole, self.pressure_enabled = eraser_whole, pressure_enabled
         self.recent_files = list(dict.fromkeys(recent))[:10]
+        position = value.get("toolbar_position", "bottom")
+        self.toolbar_position = position if isinstance(position, str) and position in {"bottom", "left", "right"} else "bottom"
 
     def save(self) -> None:
         value = {
             "version": 1,
             "language": self.language,
+            "toolbar_position": self.toolbar_position,
             "pens": [asdict(brush) for brush in self.pens],
             "highlighter": asdict(self.highlighter),
             "eraser_radius": self.eraser_radius,

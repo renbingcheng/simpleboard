@@ -8,6 +8,8 @@ from __future__ import annotations
 from .i18n import tr
 
 from dataclasses import asdict
+import base64
+import binascii
 import json
 import math
 import os
@@ -18,9 +20,10 @@ from typing import Any
 import zipfile
 import zlib
 
-from .models import BoardDocument, Brush, EraseMask, InkSample, Stroke
+from .images import ImageError, MAX_IMAGE_BYTES, MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, validate_images
+from .models import BoardDocument, BoardImage, Brush, EraseMask, InkSample, Stroke
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 MAX_JSON_BYTES = 256 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_STROKES = 100_000
@@ -98,6 +101,10 @@ def brush_from_dict(value: Any, *, require_profile: bool = False) -> Brush:
 
 def document_to_dict(document: BoardDocument) -> dict:
     """Convert immutable document values to a detached schema snapshot."""
+    try:
+        validate_images(document.images, used_ids={stroke.id for stroke in document.strokes if isinstance(stroke.id, str)})
+    except ImageError as exc:
+        raise DocumentError(str(exc)) from exc
     return {
         "format": "qboard",
         "version": FORMAT_VERSION,
@@ -124,6 +131,17 @@ def document_to_dict(document: BoardDocument) -> dict:
             }
             for stroke in document.strokes
         ],
+        "images": [
+            {
+                "id": image.id,
+                "x": image.x,
+                "y": image.y,
+                "width": image.width,
+                "height": image.height,
+                "png": base64.b64encode(image.png_data).decode("ascii"),
+            }
+            for image in document.images
+        ],
     }
 
 
@@ -132,7 +150,7 @@ def _parse_document(value: Any, construct: bool) -> BoardDocument | None:
     if value.get("format") != "qboard":
         raise DocumentError(tr('这不是有效的 QBoard 白板文档。'))
     version = value.get("version")
-    if type(version) is not int or version not in (1, FORMAT_VERSION):
+    if type(version) is not int or version not in (1, 2, FORMAT_VERSION):
         raise DocumentError(tr('白板文件版本不受支持，请使用兼容的应用版本打开。'))
     view = _mapping(value.get("view", {}), tr('画布视图'))
     background = _color(value.get("background", "#FFFFFF"))
@@ -201,6 +219,37 @@ def _parse_document(value: Any, construct: bool) -> BoardDocument | None:
         if construct:
             document.strokes.append(Stroke(samples=samples, brush=brush, id=stroke_id,
                                            offset_x=stroke_x, offset_y=stroke_y, erase_masks=masks))
+    raw_images = _list(value.get("images", []), tr('图片'), MAX_IMAGES)
+    if version < 3 and raw_images:
+        raise DocumentError(tr('第 1、2 版白板文件不能包含图片。'))
+    images = []
+    total_image_bytes = 0
+    for raw in raw_images:
+        raw = _mapping(raw, tr('图片'))
+        encoded = raw.get("png")
+        if not isinstance(encoded, str) or len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+            raise DocumentError(tr('图片编码无效或数据过大。'))
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise DocumentError(tr('图片编码无效或数据过大。')) from exc
+        total_image_bytes += len(data)
+        if total_image_bytes > MAX_TOTAL_IMAGE_BYTES:
+            raise DocumentError(tr('文档图片总量超出限制：64 MiB 或 3200 万像素。'))
+        images.append(BoardImage(
+            png_data=data,
+            x=_number(raw.get("x"), tr('图片位置')),
+            y=_number(raw.get("y"), tr('图片位置')),
+            width=_number(raw.get("width"), tr('图片宽度'), 0.01, 1e9),
+            height=_number(raw.get("height"), tr('图片高度'), 0.01, 1e9),
+            id=raw.get("id"),
+        ))
+    try:
+        validate_images(images, used_ids=seen_ids)
+    except ImageError as exc:
+        raise DocumentError(str(exc)) from exc
+    if construct:
+        document.images = images
     return document
 
 

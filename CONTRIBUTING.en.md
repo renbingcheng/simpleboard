@@ -37,7 +37,7 @@ Pure layout or wording changes do not need tests duplicating the implementation,
 ## Implementation conventions
 
 - Keep module responsibilities clear and follow existing Python style and type annotations. Avoid unrelated reformatting.
-- Treat committed strokes, brushes, samples, and masks as immutable values. Moving and erasing replace objects instead of mutating shared lists; recovery workers and undo rely on this.
+- Treat committed strokes, brushes, samples, masks, and images as immutable values. Moving and erasing replace objects instead of mutating shared lists; recovery workers and undo rely on this.
 - Continuous movement during one contact is one operation. Real release, cancellation, loss of focus, or capture loss ends continuity. Do not infer that separate contacts should join using short delays or pressure thresholds.
 - Failed saves must preserve unsaved work and valid existing files. Apply new limits consistently to loading and saving.
 - Avoid synchronous disk access in input/painting paths and repeated whole-document geometry calculations per sample.
@@ -53,7 +53,11 @@ For another language, register its code and native name in `LANGUAGES` in `white
 
 Maintain `README.md` / `README.en.md` and `CONTRIBUTING.md` / `CONTRIBUTING.en.md` together, retaining the language links at the top. Synchronize controls, compatibility limits, commands, and download links. Other documents currently retain their original language; English entry points mark Chinese documents explicitly. Preserve upstream license texts verbatim. Add new public documents to `.gitignore` exceptions and `scripts/public_distribution.py` so source, single-file, and directory packages include them.
 
-Verify that changing language preserves strokes, undo history, selection, and view. Check untitled titles, save/recovery prompts, export filters, and diagnostics. English text is often longer: inspect the 720×560 minimum window and tool popovers, beyond simply checking catalog coverage.
+Verify that changing language preserves strokes, images, undo history, selection, and view. Check untitled titles, save/recovery prompts, export filters, and diagnostics. English text is often longer: inspect the 720×560 minimum window and tool popovers with bottom, left, and right toolbars, including both sidebar column layouts. Catalog coverage alone is insufficient.
+
+Check “Select image” (`S`) separately from Lasso (`L`): ordinary pens, the lasso, and temporary pen-side-button selection must not move or resize images. Selecting ink over an image must preserve the background. The global pressure toggle lives in the main menu; sensitivity stays in the pen popover and is disabled when pressure is off.
+
+Run the full regression suite with `QT_QPA_PLATFORM=offscreen`. Before release, run the final EXE with `--smoke-test --smoke-output <directory>` to check native Windows execution, PNG/JPEG import, save/reopen after deleting the original files, image-transform undo, and PNG/PDF exports. Keep `qjpeg.dll` in the build; JPEG support in development does not prove the packaged app includes the plugin. Local reports in `artifacts/` are excluded from source commits.
 
 ## Describe validation accurately
 

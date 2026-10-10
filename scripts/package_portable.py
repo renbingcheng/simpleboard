@@ -53,7 +53,8 @@ def verify_onefile_resources(root: Path, executable: Path) -> None:
             raise RuntimeError(f"Embedded {relative} differs from source. Rebuild after documentation/license changes.")
         verified.append({"path": relative, "sha256": hashlib.sha256(embedded).hexdigest()})
     required = ("python311.dll", "PySide6/Qt6Core.dll", "PySide6/Qt6Gui.dll", "PySide6/Qt6Widgets.dll",
-                "PySide6/plugins/platforms/qwindows.dll")
+                "PySide6/plugins/platforms/qwindows.dll",
+                "PySide6/plugins/imageformats/qjpeg.dll")
     lower_names = {name.lower() for name in names}
     for name in required:
         if name.lower() not in lower_names:

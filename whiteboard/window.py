@@ -14,7 +14,7 @@ from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGraphicsDropShadowEffect,
-    QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox,
+    QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox,
     QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -207,23 +207,27 @@ class MainWindow(QMainWindow):
         self.save_action = self._action('保存', self.save_document, "Ctrl+S")
         self.save_as_action = self._action('另存为…', self.save_as_document, "Ctrl+Shift+S")
         self.export_action = self._action('导出…', self.export_document, "Ctrl+Shift+E")
+        self.insert_image_action = self._action('插入图片…', self.insert_image, "Ctrl+Shift+I")
         self.undo_action = self._action('撤销', self._undo, "Ctrl+Z")
         self.redo_action = self._action('重做', self._redo, ("Ctrl+Y", "Ctrl+Shift+Z"))
-        self.delete_action = self._action('删除选中笔迹', self.canvas.delete_selection, ("Delete", "Backspace"))
+        self.delete_action = self._action('删除选中对象', self.canvas.delete_selection, ("Delete", "Backspace"))
         self.delete_action.setEnabled(False)
         self.clear_action = self._action('清空白板…', self.clear_document)
         self.fullscreen_action = self._action('全屏', self.toggle_fullscreen, "F11", True)
         self.diagnostics_action = self._action('输入诊断', lambda checked: None, "F12", True)
         self.diagnostics_action.toggled.connect(self._toggle_diagnostics)
         self.grid_action = self._action('始终显示网格', self.canvas.set_grid_enabled, checkable=True)
+        self.pressure_action = self._action('启用压感', self._set_pressure_enabled, checkable=True)
+        self.pressure_action.setChecked(self.settings.pressure_enabled)
         self._action('退出全屏 / 取消选择', self._escape, "Escape")
         self._action('原始大小', self.canvas.reset_zoom, "Ctrl+0")
-        self._action('适应全部笔迹', self.canvas.fit_all, "Ctrl+1")
+        self._action('适应全部内容', self.canvas.fit_all, "Ctrl+1")
         self._action('放大', lambda: self.canvas.zoom_by(1.2), ("Ctrl++", "Ctrl+="))
         self._action('缩小', lambda: self.canvas.zoom_by(1 / 1.2), "Ctrl+-")
         self._action('荧光笔', lambda: self._select_tool("highlighter"), "H")
         self._action('橡皮擦', lambda: self._select_tool("eraser"), "E")
         self._action('套索选择', lambda: self._select_tool("lasso"), "L")
+        self.select_image_action = self._action('选择图片', lambda: self._select_tool("select"), "S")
         self._action('移动画布', lambda: self._select_tool("pan"), "V")
         self._action('画笔', lambda: self._select_pen(self._active_pen), "P")
         for index in range(6):
@@ -233,10 +237,10 @@ class MainWindow(QMainWindow):
         self.undo_action.setEnabled(False)
         self.redo_action.setEnabled(False)
 
-    def _card(self, name, margins=(10, 8, 10, 8), spacing=4):
+    def _card(self, name, margins=(10, 8, 10, 8), spacing=4, *, grid=False):
         card = QFrame(self.host)
         card.setObjectName(name)
-        layout = QHBoxLayout(card)
+        layout = QGridLayout(card) if grid else QHBoxLayout(card)
         layout.setContentsMargins(*margins)
         layout.setSpacing(spacing)
         shadow = QGraphicsDropShadowEffect(card)
@@ -319,6 +323,7 @@ class MainWindow(QMainWindow):
         self.main_menu.addAction(self.save_action)
         self.main_menu.addAction(self.save_as_action)
         self.main_menu.addAction(self.export_action)
+        self.main_menu.addAction(self.insert_image_action)
         self.recent_menu = self.main_menu.addMenu('')
         self.text_bindings.bind(self.recent_menu, 'title', '最近打开')
         self.recent_menu.setToolTipsVisible(True)
@@ -328,13 +333,45 @@ class MainWindow(QMainWindow):
         self.recovery_action = self._action('恢复上次未保存白板…', self._show_recovery)
         self.main_menu.addAction(self.recovery_action)
         self.main_menu.addSeparator()
+        self.main_menu.addAction(self.pressure_action)
         self.main_menu.addAction(self.grid_action)
+        self._build_toolbar_position_menu()
         self.main_menu.addAction(self.fullscreen_action)
         self.main_menu.addAction(self.diagnostics_action)
         self.main_menu.addSeparator()
         self.main_menu.addAction(self._action('快捷键与操作', self._show_help))
         self._build_language_menu()
         self.menu_button.setMenu(self.main_menu)
+
+    def _build_toolbar_position_menu(self):
+        menu = self.main_menu.addMenu("")
+        self.text_bindings.bind(menu, "title", '工具条位置')
+        self.toolbar_position_menu = menu
+        self.toolbar_position_group = QActionGroup(self)
+        self.toolbar_position_group.setExclusive(True)
+        self.toolbar_position_actions = {}
+        for position, text in (("bottom", '下方（默认）'), ("left", '左侧'), ("right", '右侧')):
+            action = self._action(text, lambda checked=False, p=position: self.set_toolbar_position(p), checkable=True)
+            self.toolbar_position_group.addAction(action)
+            action.setChecked(position == self.settings.toolbar_position)
+            menu.addAction(action)
+            self.toolbar_position_actions[position] = action
+
+    def set_toolbar_position(self, position):
+        if position not in self.toolbar_position_actions or position == self.settings.toolbar_position:
+            return
+        self.canvas.finish_interaction()
+        if self._popover is not None:
+            try:
+                self._popover.close()
+            except RuntimeError:
+                pass
+            self._popover = None
+        self.settings.toolbar_position = position
+        self.toolbar_position_actions[position].setChecked(True)
+        self._layout_overlays()
+        self._save_settings()
+        self.canvas.setFocus()
 
     def _build_language_menu(self):
         menu = self.main_menu.addMenu("")
@@ -371,7 +408,7 @@ class MainWindow(QMainWindow):
         self._save_settings()
 
     def _build_tools(self):
-        self.tools_card, layout = self._card("toolsCard", (8, 7, 8, 7), 5)
+        self.tools_card, layout = self._card("toolsCard", (8, 7, 8, 7), 5, grid=True)
         self.tools_card.graphicsEffect().setBlurRadius(16)
         self.tools_card.graphicsEffect().setOffset(0, 3)
         self.pen_buttons = []
@@ -381,15 +418,15 @@ class MainWindow(QMainWindow):
                 lambda checked=False, i=index: self._pen_clicked(i),
                 checkable=True, color=brush.color, text_values={'p0': index + 1, 'p1': index + 1})
             self.pen_buttons.append(button)
-            layout.addWidget(button)
-        layout.addSpacing(4)
-        layout.addWidget(self._separator())
-        layout.addSpacing(4)
+            button.setParent(self.tools_card)
+        self.tools_separator = self._separator()
+        self.tools_separator.setParent(self.tools_card)
         self.tool_buttons = {}
         specs = (
             ("highlighter", '荧光笔 · H\n再次点按设置颜色与粗细'),
             ("eraser", '橡皮擦 · E\n再次点按设置擦除方式与大小'),
-            ("lasso", '套索选择 · L\n圈选笔迹后拖动，Delete 删除'),
+            ("lasso", '套索选择 · L\n圈选笔迹后拖动，Delete 删除；不会选中图片'),
+            ("select", '选择图片 · S\n点选图片后拖动，拖动四角调整大小；Delete 删除'),
             ("pan", '移动画布 · V\n也可用手指移动、双指缩放'),
         )
         for name, tooltip in specs:
@@ -397,8 +434,48 @@ class MainWindow(QMainWindow):
                                   checkable=True,
                                   color=self.settings.highlighter.color if name == "highlighter" else None)
             self.tool_buttons[name] = button
-            layout.addWidget(button)
-        self.tools_card.setFixedSize(self.tools_card.sizeHint().width(), 60)
+            button.setParent(self.tools_card)
+        self.insert_image_button = self._button(
+            "image", '插入图片 · Ctrl+Shift+I', self.insert_image_action.trigger)
+        self.insert_image_button.setParent(self.tools_card)
+        self._tools_layout_mode = None
+        self._arrange_tools()
+
+    def _arrange_tools(self):
+        position = self.settings.toolbar_position
+        # Keep 44 px targets on short landscape windows: sidebars wrap into
+        # two columns instead of shrinking or pushing tools below the canvas.
+        tools = [self.tool_buttons["highlighter"], self.tool_buttons["eraser"],
+                 self.insert_image_button, self.tool_buttons["lasso"],
+                 self.tool_buttons["select"], self.tool_buttons["pan"]]
+        buttons = self.pen_buttons + tools
+        single_column_height = 15 + len(buttons) * 49
+        columns = 1 if self.host.height() - 88 >= single_column_height else 2
+        mode = "bottom" if position == "bottom" else f"side-{columns}"
+        if mode == self._tools_layout_mode:
+            return
+        self._tools_layout_mode = mode
+        layout = self.tools_card.layout()
+        while layout.count():
+            layout.takeAt(0)
+        if position == "bottom":
+            for index, button in enumerate(buttons):
+                layout.addWidget(button, 0, index if index < len(self.pen_buttons) else index + 1)
+            self.tools_separator.setFixedSize(1, 27)
+            layout.addWidget(self.tools_separator, 0, len(self.pen_buttons), Qt.AlignmentFlag.AlignCenter)
+            self.tools_card.setFixedSize(17 + len(buttons) * 49, 60)
+        else:
+            pen_rows = (len(self.pen_buttons) + columns - 1) // columns
+            for index, button in enumerate(self.pen_buttons):
+                layout.addWidget(button, index // columns, index % columns)
+            self.tools_separator.setFixedSize(27 if columns == 1 else 76, 1)
+            layout.addWidget(self.tools_separator, pen_rows, 0, 1, columns, Qt.AlignmentFlag.AlignCenter)
+            for index, button in enumerate(tools):
+                layout.addWidget(button, pen_rows + 1 + index // columns, index % columns)
+            rows = pen_rows + 1 + (len(tools) + columns - 1) // columns
+            self.tools_card.setFixedSize(16 + columns * 44 + (columns - 1) * 5,
+                                         14 + (rows - 1) * 44 + 1 + (rows - 1) * 5)
+        layout.activate()
 
     def _build_zoom(self):
         self.zoom_card = QFrame(self.top_card)
@@ -414,7 +491,7 @@ class MainWindow(QMainWindow):
         self.zoom_label.clicked.connect(self.canvas.reset_zoom)
         layout.addWidget(self.zoom_label)
         layout.addWidget(self._button("plus", '放大 · Ctrl++', lambda: self.canvas.zoom_by(1.2)))
-        layout.addWidget(self._button("fit", '适应全部笔迹 · Ctrl+1', self.canvas.fit_all))
+        layout.addWidget(self._button("fit", '适应全部内容 · Ctrl+1', self.canvas.fit_all))
         self.zoom_card.setFixedSize(186, 44)
         self.top_card.layout().addWidget(self.zoom_card)
 
@@ -423,7 +500,7 @@ class MainWindow(QMainWindow):
         self.selection_label = QLabel()
         layout.addWidget(self.selection_label)
         delete = self.text_bindings.bind(QPushButton(), 'text', '删除')
-        self.text_bindings.bind(delete, 'toolTip', '删除选中笔迹 · Delete')
+        self.text_bindings.bind(delete, 'toolTip', '删除选中对象 · Delete')
         delete.clicked.connect(self.canvas.delete_selection)
         layout.addWidget(delete)
         self.selection_card.setFixedHeight(52)
@@ -443,13 +520,23 @@ class MainWindow(QMainWindow):
         self.file_status.setMaximumWidth(self.file_title.maximumWidth())
         self.top_card.layout().activate()
         self._update_title()
-        self.tools_card.move((width - self.tools_card.width()) // 2, height - 76)
+        self._arrange_tools()
+        position = self.settings.toolbar_position
+        if position == "bottom":
+            self.tools_card.move((width - self.tools_card.width()) // 2, height - 76)
+        else:
+            x = 16 if position == "left" else width - self.tools_card.width() - 16
+            self.tools_card.move(x, 56 + (height - 56 - self.tools_card.height()) // 2)
         # Floating panels are outside the host layout; explicitly size them
         # after translation instead of retaining QFrame's initial 30 px height.
         self.diagnostics.adjustSize()
-        self.diagnostics.move(16, 68)
+        self.diagnostics.move(self.tools_card.geometry().right() + 16 if position == "left" else 16, 68)
         self.selection_card.adjustSize()
-        self.selection_card.move(width - self.selection_card.width() - 16, 68)
+        selection_right = self.tools_card.x() - 16 if position == "right" else width - 16
+        self.selection_card.move(selection_right - self.selection_card.width(), 68)
+        if (self.diagnostics.isVisible() and self.selection_card.isVisible()
+                and self.diagnostics.geometry().intersects(self.selection_card.geometry())):
+            self.selection_card.move(self.selection_card.x(), self.diagnostics.geometry().bottom() + 12)
         if self.toast_label.isVisible():
             self._layout_toast()
         for overlay in (self.top_card, self.tools_card, self.zoom_card,
@@ -526,10 +613,17 @@ class MainWindow(QMainWindow):
                 pass
         self._popover = popup
         popup.adjustSize()
-        point = anchor.mapToGlobal(QPoint(anchor.width() // 2, 0))
+        point = anchor.mapToGlobal(QPoint(0, 0))
         screen = anchor.screen().availableGeometry()
-        x = min(max(point.x() - popup.width() // 2, screen.left() + 8), screen.right() - popup.width() - 8)
-        y = max(screen.top() + 8, point.y() - popup.height() - 12)
+        position = self.settings.toolbar_position
+        if position == "left":
+            x, y = self.tools_card.mapToGlobal(QPoint(self.tools_card.width() + 12, 0)).x(), point.y()
+        elif position == "right":
+            x, y = self.tools_card.mapToGlobal(QPoint(-popup.width() - 12, 0)).x(), point.y()
+        else:
+            x, y = point.x() + anchor.width() // 2 - popup.width() // 2, point.y() - popup.height() - 12
+        x = max(screen.left() + 8, min(x, screen.right() - popup.width() - 8))
+        y = max(screen.top() + 8, min(y, screen.bottom() - popup.height() - 8))
         popup.move(x, y)
         popup.show()
 
@@ -537,7 +631,8 @@ class MainWindow(QMainWindow):
         brush = self.settings.highlighter if index is None else self.settings.pens[index]
         popup = BrushPopover(brush, self.settings.pressure_enabled, self.settings.sensitivity, self)
         popup.brush_changed.connect(lambda updated, i=index: self._change_brush(i, updated))
-        popup.pressure_changed.connect(self._change_pressure)
+        popup.sensitivity_changed.connect(
+            lambda sensitivity: self._change_pressure(self.settings.pressure_enabled, sensitivity))
         anchor = self.tool_buttons["highlighter"] if index is None else self.pen_buttons[index]
         self._show_popup(popup, anchor)
 
@@ -560,8 +655,20 @@ class MainWindow(QMainWindow):
                                              sensitivity=self.settings.sensitivity))
         self._settings_timer.start()
 
+    def _set_pressure_enabled(self, enabled):
+        self.canvas.finish_interaction()
+        if self._popover is not None:
+            try:
+                self._popover.close()
+            except RuntimeError:
+                pass
+            self._popover = None
+        self._change_pressure(enabled, self.settings.sensitivity)
+        self._save_settings()
+
     def _change_pressure(self, enabled, sensitivity):
         self.settings.pressure_enabled = enabled
+        self.pressure_action.setChecked(enabled)
         self.settings.sensitivity = sensitivity
         for brush in self.settings.pens:
             brush.pressure_enabled, brush.sensitivity = enabled, sensitivity
@@ -591,7 +698,8 @@ class MainWindow(QMainWindow):
 
     def _on_selection_changed(self, count):
         self.delete_action.setEnabled(bool(count))
-        self.selection_label.setText(tr('已选择 {p0} 笔', p0=count))
+        selected_images = any(item.id in self.canvas.selection_ids for item in self.scene.document.images)
+        self.selection_label.setText(tr('已选择 {p0} 项' if selected_images else '已选择 {p0} 笔', p0=count))
         self.selection_card.setVisible(bool(count))
         self._layout_overlays()
 
@@ -624,8 +732,9 @@ class MainWindow(QMainWindow):
         self.file_status.setToolTip(status)
         self.file_status.setAccessibleName(status)
         self.file_status.setVisible(bool(status))
-        self.clear_action.setEnabled(bool(self.scene.document.strokes))
-        self.export_action.setEnabled(bool(self.scene.document.strokes))
+        has_content = bool(self.scene.document.strokes or self.scene.document.images)
+        self.clear_action.setEnabled(has_content)
+        self.export_action.setEnabled(has_content)
         self.recovery_action.setVisible(self._recovery_blocked)
 
     def _snapshot(self):
@@ -776,6 +885,22 @@ class MainWindow(QMainWindow):
     def export_document(self, *_):
         return self._export_current_view("png", choose_format=True)
 
+    def insert_image(self, *_):
+        self.canvas.finish_interaction()
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr('插入图片'), self._default_directory(),
+            tr('图片 (*.png *.jpg *.jpeg *.bmp);;PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)'))
+        if not path:
+            return False
+        try:
+            self.canvas.insert_image_path(path)
+        except (DocumentError, OSError, ValueError, MemoryError) as exc:
+            self._show_error(tr('无法插入图片'), str(exc))
+            return False
+        self._select_tool("select")
+        self._toast(tr('图片已插入 · 拖动可移动，拖动四角调整大小'))
+        return True
+
     def export_png(self, *_):
         """Compatibility entry point for callers explicitly requesting PNG."""
         return self._export_current_view("png", choose_format=False)
@@ -787,8 +912,8 @@ class MainWindow(QMainWindow):
         from .exporting import export_pdf, export_png
 
         self.canvas.finish_interaction()
-        if not self.scene.document.strokes:
-            self._toast(tr('白板还是空的，写几笔后再导出'))
+        if not (self.scene.document.strokes or self.scene.document.images):
+            self._toast(tr('白板还是空的，添加内容后再导出'))
             return False
         filters = {"png": tr('PNG 图片 (*.png)'), "pdf": tr('PDF 文档 (*.pdf)')}
         filename = (self.current_path.stem if self.current_path else tr('白板')) + "." + default_format
@@ -874,9 +999,9 @@ class MainWindow(QMainWindow):
 
     def clear_document(self, *_):
         self.canvas.finish_interaction()
-        if not self.scene.document.strokes:
+        if not (self.scene.document.strokes or self.scene.document.images):
             return
-        result = QMessageBox.question(self, tr('清空白板'), tr('清空当前白板上的全部笔迹？\n此操作可以撤销。'),
+        result = QMessageBox.question(self, tr('清空白板'), tr('清空当前白板上的全部笔迹和图片？\n此操作可以撤销。'),
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
                                       QMessageBox.StandardButton.Cancel)
         if result == QMessageBox.StandardButton.Yes:
@@ -1011,9 +1136,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr('导出失败'), str(error))
 
     def _show_help(self):
+        image_help = tr('Ctrl+Shift+I 插入图片；图片保存在白板内，可离线重新打开。\n选择图片工具 S：点选图片后拖动，拖动四角等比调整大小。\n套索工具 L 只圈选笔迹，不会选中图片。\n菜单 → 工具条位置：下方、左侧或右侧。')
         QMessageBox.information(
-            self, tr('快捷键与操作'),
-            tr('画笔 1–6\u3000·\u3000荧光笔 H\u3000·\u3000橡皮 E\u3000·\u3000套索 L\u3000·\u3000移动 V\n再次点按当前画笔或橡皮，可调整工具设置。\n\n手指移动画布，双指缩放；也可切换移动工具拖动。\n翻转 Surface Pen 临时擦除，笔靠近时优先书写。\n套索按逻辑整笔选择，局部擦除后的残片一起移动。\n\nCtrl+N 新建\u3000\u3000Ctrl+O 打开\u3000\u3000Ctrl+S 保存\nCtrl+Shift+S 另存为\u3000\u3000Ctrl+Shift+E 导出 PNG / PDF\nCtrl+Z 撤销\u3000\u3000Ctrl+Y 重做\u3000\u3000Delete 删除所选\nCtrl+0 原始大小\u3000\u3000Ctrl+1 适应全部笔迹\nF11 全屏\u3000\u3000F12 输入诊断'))
+            self, tr('快捷键与操作'), image_help + "\n\n" +
+            tr('画笔 1–6\u3000·\u3000荧光笔 H\u3000·\u3000橡皮 E\u3000·\u3000套索 L\u3000·\u3000移动 V\n再次点按当前画笔或橡皮，可调整工具设置。\n\n手指移动画布，双指缩放；也可切换移动工具拖动。\n翻转 Surface Pen 临时擦除，笔靠近时优先书写。\n套索按逻辑整笔选择，局部擦除后的残片一起移动。\n\nCtrl+N 新建\u3000\u3000Ctrl+O 打开\u3000\u3000Ctrl+S 保存\nCtrl+Shift+S 另存为\u3000\u3000Ctrl+Shift+E 导出 PNG / PDF\nCtrl+Z 撤销\u3000\u3000Ctrl+Y 重做\u3000\u3000Delete 删除所选\nCtrl+0 原始大小\u3000\u3000Ctrl+1 适应全部内容\nF11 全屏\u3000\u3000F12 输入诊断'))
 
     def _toast(self, text, duration=3500):
         self._toast_text = str(text)
@@ -1027,7 +1153,8 @@ class MainWindow(QMainWindow):
 
     def _layout_toast(self):
         label = self.toast_label
-        width_limit = max(1, self.host.width() - 64)
+        side_margin = self.tools_card.width() + 16 if self.settings.toolbar_position != "bottom" else 0
+        width_limit = max(1, self.host.width() - 64 - side_margin)
         label.setMaximumWidth(width_limit)
         label.ensurePolished()
         margins = label.contentsMargins()
@@ -1045,7 +1172,7 @@ class MainWindow(QMainWindow):
             label.resize(width, label.heightForWidth(width))
 
         fit(self._toast_text)
-        bottom = self.tools_card.y() - 16
+        bottom = self.tools_card.y() - 16 if self.settings.toolbar_position == "bottom" else self.host.height() - 16
         top = 68
         for panel in (self.diagnostics, self.selection_card):
             if panel.isVisible():
@@ -1063,7 +1190,8 @@ class MainWindow(QMainWindow):
                 else:
                     high = middle - 1
             fit(self._toast_text[:low] + "…")
-        label.move((self.host.width() - label.width()) // 2, bottom - label.height())
+        center_offset = side_margin if self.settings.toolbar_position == "left" else -side_margin
+        label.move((self.host.width() - label.width() + center_offset) // 2, bottom - label.height())
 
     def _show_error(self, title, message):
         QMessageBox.critical(self, title, message)

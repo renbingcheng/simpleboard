@@ -174,6 +174,22 @@ class ToolSelectionTests(unittest.TestCase):
         self.choose_pen(5)
         self.assert_tip_draws(5)
 
+    def test_temporary_tail_keeps_image_selection_tool_checked(self):
+        identifier = self.add_line()
+        button = self.window.tool_buttons["select"]
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.canvas.tool, "select")
+        self.tablet(QEvent.Type.TabletPress, 100)
+        self.tablet(QEvent.Type.TabletMove, 500)
+        self.assertEqual(self.canvas._interaction, "erase")
+        self.assertEqual(self.window._tool, "select")
+        self.assertTrue(button.isChecked())
+        self.assertFalse(self.window.tool_buttons["eraser"].isChecked())
+        self.tablet(QEvent.Type.TabletRelease, 500)
+        self.assertFalse(visible_path(self.scene.get(identifier)).contains(QPointF(300, 200)))
+        self.assertTrue(button.isChecked())
+        self.assertEqual(self.canvas.tool, "select")
+
 
 if __name__ == "__main__":
     unittest.main()

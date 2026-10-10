@@ -55,7 +55,7 @@ class LayoutTests(unittest.TestCase):
                 self.assertTrue(window.host.rect().contains(window.tools_card.geometry()))
                 self.assertFalse(window.top_card.geometry().intersects(window.tools_card.geometry()))
                 self.assertEqual(window.tools_card.findChildren(QToolButton),
-                                 window.pen_buttons + list(window.tool_buttons.values()))
+                                 window.pen_buttons + list(window.tool_buttons.values()) + [window.insert_image_button])
                 self.assertIs(window.undo_button.parentWidget(), window.top_card)
                 self.assertIs(window.redo_button.parentWidget(), window.top_card)
                 self.assertTrue(window.brand_label.isHidden())
@@ -79,7 +79,7 @@ class LayoutTests(unittest.TestCase):
                 for button in (window.menu_button, window.undo_button,
                                window.redo_button, window.zoom_label,
                                *window.zoom_card.findChildren(QToolButton),
-                               *window.pen_buttons, *window.tool_buttons.values()):
+                               *window.pen_buttons, *window.tool_buttons.values(), window.insert_image_button):
                     self.assertGreaterEqual(button.width(), 44)
                     self.assertGreaterEqual(button.height(), 44)
                     self.assertTrue(button.isVisible())

@@ -43,7 +43,11 @@ jobs:
         run: python -B -m unittest discover -s tests -v
 
       - name: Build and verify the unsigned standalone EXE
-        run: ./build.ps1 -Mode onefile -Python (Get-Command python -CommandType Application).Source
+        run: |
+          $taskBuildPython = python -c 'import sys; print(sys.executable)'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the Python interpreter.' }
+          if (@($taskBuildPython).Count -ne 1 -or -not (Test-Path -LiteralPath $taskBuildPython -PathType Leaf)) { throw 'Python did not return one executable path.' }
+          ./build.ps1 -Mode onefile -Python $taskBuildPython
 
       - name: Smoke test the packaged EXE
         timeout-minutes: 3

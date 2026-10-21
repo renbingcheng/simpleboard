@@ -1,0 +1,106 @@
+name: Unsigned signing candidate
+
+# Preparation for a SignPath Foundation application only.
+# This workflow does not submit signing requests or publish a release.
+# See https://docs.signpath.io/trusted-build-systems/github
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: "1"
+      PIP_NO_CACHE_DIR: "1"
+    steps:
+      - name: Check out the selected revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11 x64
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+          architecture: x64
+          # Do not restore dependencies or build output from previous runs.
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Check upstream notice hashes
+        run: python -B scripts/prepare_licenses.py
+
+      - name: Run regression tests
+        run: python -B -m unittest discover -s tests -v
+
+      - name: Build and verify the unsigned standalone EXE
+        run: ./build.ps1 -Mode onefile -Python (Get-Command python -CommandType Application).Source
+
+      - name: Smoke test the packaged EXE
+        timeout-minutes: 3
+        run: |
+          $taskSmoke = Start-Process -FilePath ./dist/SimpleBoard.exe -ArgumentList '--smoke-test', '--smoke-output', 'artifacts/signing-candidate-smoke' -PassThru -Wait -WindowStyle Hidden
+          if ($taskSmoke.ExitCode -ne 0) { throw "Packaged smoke test failed: $($taskSmoke.ExitCode)" }
+          $taskResult = Get-Content -LiteralPath artifacts/signing-candidate-smoke/result.json -Raw | ConvertFrom-Json
+          if (-not $taskResult.ok -or -not $taskResult.frozen) { throw 'Packaged smoke report did not confirm a successful frozen executable test.' }
+          $taskSignature = Get-AuthenticodeSignature -LiteralPath ./dist/SimpleBoard.exe
+          if ($taskSignature.Status -ne 'NotSigned') { throw "Expected an unsigned candidate, got $($taskSignature.Status)." }
+
+      - name: Package reviewed source and record build inputs
+        run: |
+          python -B scripts/package_source.py
+          if ($LASTEXITCODE -ne 0) { throw 'Source packaging failed.' }
+          python -m pip freeze --all | Set-Content -LiteralPath artifacts/signing-candidate-dependencies.txt -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency inventory failed.' }
+          $taskBuild = [ordered]@{
+            status = 'unsigned; SignPath integration pending application approval'
+            repository = $env:GITHUB_REPOSITORY
+            ref = $env:GITHUB_REF
+            commit = $env:GITHUB_SHA
+            workflow = $env:GITHUB_WORKFLOW_REF
+            run_url = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            runner_image = $env:ImageOS
+            runner_image_version = $env:ImageVersion
+            python = (& python --version)
+            executable_sha256 = (Get-FileHash -LiteralPath dist/SimpleBoard.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $taskBuild | ConvertTo-Json | Set-Content -LiteralPath artifacts/signing-candidate-build.json -Encoding utf8
+
+      # Keep the EXE separate so an approved future integration can reference
+      # this step's artifact-id. No SignPath credentials or policies exist here.
+      - name: Upload unsigned EXE
+        id: upload-unsigned-exe
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: SimpleBoard-unsigned-${{ github.sha }}-${{ github.run_attempt }}
+          path: dist/SimpleBoard.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload source, checksums and build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: SimpleBoard-build-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            dist/SimpleBoard.exe.sha256
+            dist/SimpleBoard-*-source.zip
+            dist/SimpleBoard-*-source.zip.sha256
+            artifacts/build-onefile.log
+            artifacts/package-onefile.log
+            artifacts/onefile-resource-check.json
+            artifacts/signing-candidate-dependencies.txt
+            artifacts/signing-candidate-build.json
+            artifacts/signing-candidate-smoke/result.json
+          if-no-files-found: error
+          retention-days: 30

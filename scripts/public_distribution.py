@@ -13,7 +13,7 @@ import stat
 
 PUBLIC_ROOT_DOCUMENTS = (
     "README.md", "README.en.md", "AUTHORS.md", "CONTRIBUTING.md", "CONTRIBUTING.en.md",
-    "CHANGELOG.md", "SECURITY.md",
+    "CHANGELOG.md", "SECURITY.md", "CODE_SIGNING.md",
     "LICENSE", "THIRD_PARTY_NOTICES.txt",
 )
 PUBLIC_DOC_FILES = ("docs/THIRD_PARTY.md", "docs/images/simpleboard.png")

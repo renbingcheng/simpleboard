@@ -8,6 +8,16 @@
 
 当前版本：**1.0.7 预览版** · 目标系统：**Windows 10 1809+ / Windows 11 x64** · 开源协议：**GPL-3.0-only**
 
+## 下载 Windows 版
+
+**[⬇ 直接下载 SimpleBoard.exe — 1.0.7 Windows x64（推荐）](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe)**
+
+下载后双击 `SimpleBoard.exe` 即可使用，无需安装 Python。可选：[ZIP 压缩包（含文档和第三方许可）](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip)，解压后运行。
+
+[1.0.7 预览版说明](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.7) · [Gitee 下载入口](https://gitee.com/renbingcheng/simpleboard/releases)
+
+[Code signing policy（代码签名政策）](CODE_SIGNING.md)：正在准备 SignPath Foundation 申请，尚未获批；当前 1.0.7 预览版 EXE 未签名。
+
 ![SimpleBoard 画布、缩放辅助网格与底部画笔栏](docs/images/simpleboard.png)
 
 截图使用自动生成的示例图片和测试笔迹，展示图片批注、局部擦除、荧光笔和网格，不代表 Surface 真实书写轨迹。
@@ -33,9 +43,9 @@
 
 按以下步骤使用：
 
-1. 打开上方任一版本下载页面，查看版本说明。
-2. 下载对应已发布版本的 `SimpleBoard-<版本>-win-x64-onefile.zip`，或单独下载 `SimpleBoard.exe`；如有对应 `.sha256` 文件，可用于核对下载内容。
-3. ZIP 包解压后双击 `SimpleBoard.exe`；单独下载 EXE 时直接打开，即可开始使用，**无需安装 Python 或另行配置运行环境**。
+1. 直接点击 [SimpleBoard.exe（推荐）](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe) 下载 1.0.7 Windows x64 预览版，无需展开发布页的 Assets。也可选择 [ZIP 压缩包](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip)；GitHub 访问不便时可使用 [Gitee 下载入口](https://gitee.com/renbingcheng/simpleboard/releases)。
+2. 阅读 [1.0.7 版本说明](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.7)；需要校验时，下载对应的 [EXE SHA-256](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe.sha256) 或 [ZIP SHA-256](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip.sha256)。
+3. 双击下载的 `SimpleBoard.exe` 即可开始使用；选择 ZIP 时先解压再运行，**无需安装 Python 或另行配置运行环境**。
 4. 用 `Ctrl+S` 将白板保存为 `.qboard` 文件，下次可继续编辑；需要分享时，用 `Ctrl+Shift+E` 导出 PNG 或 PDF。
 
 `source.zip` 是供开发者使用的源码包；直接使用软件请选择上述 Windows 运行包。单文件程序启动时会将运行组件解包到系统临时目录，设置和恢复草稿保存在应用数据目录。

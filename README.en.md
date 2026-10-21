@@ -8,6 +8,16 @@ Open it, write, then save your work or export it to share. SimpleBoard focuses o
 
 Current version: **1.0.7 preview** · Target: **Windows 10 1809+ / Windows 11 x64** · License: **GPL-3.0-only**
 
+## Download for Windows
+
+**[⬇ Download SimpleBoard.exe directly — 1.0.7 Windows x64 (recommended)](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe)**
+
+Download and open `SimpleBoard.exe`; no Python installation is required. Optional: [ZIP archive with documentation and third-party licenses](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip), which you extract before running.
+
+[1.0.7 preview release notes](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.7) · [Gitee downloads](https://gitee.com/renbingcheng/simpleboard/releases)
+
+[Code signing policy](CODE_SIGNING.md): a SignPath Foundation application is being prepared and has not been approved. The current 1.0.7 preview EXE is unsigned.
+
 ![SimpleBoard canvas, zoom guide grid, and pen toolbar](docs/images/simpleboard.png)
 
 The screenshot uses generated example images and test strokes to demonstrate image annotation, partial erasing, highlighting, and the grid. It does not show handwriting captured from a physical Surface Pen. The screenshot shows the Chinese interface; English is also available.
@@ -33,9 +43,9 @@ Source code and Windows portable packages are available on **GitHub** and **Gite
 
 To use the app:
 
-1. Open either downloads page above and read the release notes.
-2. Download `SimpleBoard-<version>-win-x64-onefile.zip` for an available release, or the standalone `SimpleBoard.exe`. Use the matching `.sha256` file, when provided, to verify the download.
-3. Extract the ZIP and open `SimpleBoard.exe`, or open a separately downloaded EXE directly. **No separate Python installation or runtime setup is required.**
+1. Click [SimpleBoard.exe (recommended)](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe) to download the 1.0.7 Windows x64 preview directly, without expanding Assets on the release page. The [ZIP archive](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip) is also available. Use [Gitee downloads](https://gitee.com/renbingcheng/simpleboard/releases) if GitHub is difficult to access.
+2. Read the [1.0.7 release notes](https://github.com/renbingcheng/simpleboard/releases/tag/v1.0.7). To verify your download, use the matching [EXE SHA-256](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard.exe.sha256) or [ZIP SHA-256](https://github.com/renbingcheng/simpleboard/releases/download/v1.0.7/SimpleBoard-1.0.7-win-x64-onefile.zip.sha256) file.
+3. Open the downloaded `SimpleBoard.exe` directly. If you chose the ZIP, extract it first. **No separate Python installation or runtime setup is required.**
 4. Press `Ctrl+S` to save an editable `.qboard` file. Press `Ctrl+Shift+E` to export PNG or PDF for sharing.
 
 The `source.zip` archive is for developers. To use the app directly, choose the Windows binary package above. The single-file app extracts runtime components into the system temporary directory when it starts; settings and recovery drafts live in the application data directory.

@@ -61,6 +61,7 @@ Desktop.ini
 !/CONTRIBUTING.en.md
 !/CHANGELOG.md
 !/SECURITY.md
+!/CODE_SIGNING.md
 
 # Keep only the public dependency disclosure and the README screenshot.
 # Includes internal architecture, development, format/reference, release-review
